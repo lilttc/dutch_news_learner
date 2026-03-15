@@ -235,7 +235,7 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
 .vocab-word {{ color:#1f77b4; text-decoration:underline; cursor:pointer; }}
 .vocab-word:hover {{ color:#1565c0; }}
 .bubble {{ display:none; position:fixed; z-index:9999; background:#fff; border:1px solid #ccc;
-  border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); padding:12px 16px; max-width:360px;
+  border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); padding:12px 16px; max-width:min(360px, 90vw);
   max-height:60vh; overflow-y:auto;
   font-family:system-ui,sans-serif; font-size:14px; line-height:1.5; }}
 .bubble.show {{ display:block; }}
@@ -306,7 +306,7 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
     }} else {{
       bubble.style.top = Math.max(8, rect.top - bh - 8) + 'px';
     }}
-    bubble.style.left = Math.min(rect.left, window.innerWidth - 380) + 'px';
+    bubble.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - Math.min(360, window.innerWidth * 0.9) - 16)) + 'px';
     overlay.style.display = 'block';
   }}
 

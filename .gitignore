@@ -14,10 +14,15 @@ build/
 .coverage
 htmlcov/
 
-# Data (DB + dictionary — too large for git)
-data/
-*.db
+# Data (raw/intermediate files — too large for git)
+data/dictionary/nl-extract.jsonl.gz
+data/dictionary/en-wiktionary-dutch.jsonl
+data/dictionary/dutch_english_fallback.json
 *.sqlite
+
+# Keep these for Streamlit Cloud deployment:
+# data/dutch_news.db (25MB)
+# data/dictionary/dutch_glosses.json (63MB)
 
 # Node
 node_modules/
