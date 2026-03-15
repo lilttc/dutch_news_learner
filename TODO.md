@@ -53,7 +53,7 @@
 
 ## Your Action Items (manual steps)
 
-- [ ] **Buy Me a Coffee**: Create account at buymeacoffee.com, update URL in `frontend/src/app/layout.tsx`
+- [x] **Buy Me a Coffee**: https://buymeacoffee.com/lilttc — URL updated in `frontend/src/app/layout.tsx`
 - [ ] **Cron job**: Set up `crontab -e` with the daily pipeline entry (see below)
 - [ ] **Clean up .env**: Remove `GOOGLE_CSE_ID` (no longer used)
 - [ ] **Test the Next.js frontend**: Open http://localhost:3000, click through episodes

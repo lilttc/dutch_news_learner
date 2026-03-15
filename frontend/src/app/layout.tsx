@@ -25,9 +25,8 @@ export default function RootLayout({
               <a href="/" className="hover:text-[var(--foreground)]">
                 Episodes
               </a>
-              {/* Update this URL after creating your page at buymeacoffee.com */}
               <a
-                href="https://buymeacoffee.com/dutchnewslearner"
+                href="https://buymeacoffee.com/lilttc"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-md bg-[#FFDD00] px-3 py-1 text-sm font-medium text-black hover:bg-[#e5c700]"
