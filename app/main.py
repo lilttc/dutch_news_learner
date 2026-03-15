@@ -8,13 +8,15 @@ Run with: streamlit run app/main.py
 
 import json
 import re
+import shutil
 import sys
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import quote_plus
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 import streamlit as st
 from sqlalchemy.orm import joinedload
@@ -38,8 +40,23 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Database
-DB_PATH = "sqlite:///data/dutch_news.db"
+# Database — copy to /tmp if source is read-only (Streamlit Cloud)
+_SOURCE_DB = PROJECT_ROOT / "data" / "dutch_news.db"
+_TMP_DB = Path("/tmp/dutch_news.db")
+
+def _get_db_path() -> str:
+    if _TMP_DB.exists():
+        return f"sqlite:///{_TMP_DB}"
+    if _SOURCE_DB.exists():
+        try:
+            _SOURCE_DB.open("a").close()
+            return f"sqlite:///{_SOURCE_DB}"
+        except OSError:
+            shutil.copy2(_SOURCE_DB, _TMP_DB)
+            return f"sqlite:///{_TMP_DB}"
+    return f"sqlite:///data/dutch_news.db"
+
+DB_PATH = _get_db_path()
 
 # Lemmas to exclude from vocabulary (show names, etc.)
 EXCLUDE_LEMMAS = {"journaal"}
