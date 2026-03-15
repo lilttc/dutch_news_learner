@@ -1,200 +1,204 @@
-# 📋 Dutch News Learner TODO
+# Dutch News Learner TODO
 
-**Last Updated:** 2026-03-14 — Related reading, translation toggle, docs updated ✅
-
----
-
-## 🎯 Tomorrow's Plan (Mar 15) — Optional Polish
-
-### Priority 1: Data & Testing
-1. **Run extract_topics on all episodes** (if not done)
-   ```bash
-   python scripts/extract_topics.py --all
-   ```
-2. **Verify Related reading links** — Check date-filtered Google search works
-3. **Test full flow** — Ingest → Extract vocab → Translate → Extract topics → App
-
-### Priority 2: Documentation
-- [ ] Add README section on dictionary fallback (gloss_en)
-- [ ] Document .env variables in .env.example
-
-### Priority 3: Next Feature Prep
-- [ ] Review quiz requirements (Phase 4)
-- [ ] Sketch quiz data model (QuizSession, QuizItem)
+**Last Updated:** 2026-03-15 (end of day)
 
 ---
 
-## 📅 This Week's Plan (Mar 15–19)
+## Completed
 
-### Mar 15–16: Quiz Foundation
-- [ ] Design quiz question types (translation MC, fill-in-blank)
-- [ ] Create QuizSession, QuizItem tables (if not in schema)
-- [ ] Build quiz generation logic (template-based, no LLM)
+### Phase 1-3: Core Platform (Mar 14)
+- [x] Ingestion pipeline (YouTube + transcripts)
+- [x] Vocabulary processing (spaCy nl_core_news_md)
+- [x] Episode viewer with embedded video
+- [x] Clickable transcript with definition bubbles (no page reload)
+- [x] English meanings in bubbles (gloss_en, comparative forms)
+- [x] Segment translation (OpenAI, toggle show/hide, default: hide)
+- [x] Vocabulary list with search, sort, frequency count
+- [x] Dictionary lookup (Wiktionary NL + EN editions)
 
-### Mar 17–18: Quiz UI
-- [ ] Add quiz page/section to Streamlit app
-- [ ] Pool: new words from episode + saved vocabulary
-- [ ] Record results, update UserVocabulary
+### Phase 3.5: UX Improvements (Mar 15 AM)
+- [x] Tab layout redesign (Transcript | Vocabulary | Related Reading)
+- [x] Bubble scroll fix (max-height 60vh, viewport-aware positioning)
+- [x] Vocabulary limit (top 20 + "Show all" toggle)
+- [x] Dictionary enrichment: EN Wiktionary Dutch entries from kaikki.org
+- [x] Related Reading: real NOS article titles via DuckDuckGo search
+- [x] Date-filtered search (±7 days around episode date)
+- [x] Retry with exponential backoff for rate-limited searches
 
-### Mar 19: Polish & Testing
-- [ ] End-to-end testing
-- [ ] Fix edge cases
-- [ ] Update docs
+### Phase 4A: Pipeline + Known Words (Mar 15 PM)
+- [x] Pipeline automation script (`scripts/run_pipeline.sh`)
+- [x] Known words filter — `UserVocabulary` table (new/learning/known)
+- [x] Status buttons in Streamlit Vocabulary tab
+- [x] "Hide known words" checkbox (default on)
 
----
-
-## 🎯 Completed Today (Mar 14, 2026) ✅
-
-### 1. **Translation Toggle Default**
-- [X] Changed "Show English translation" checkbox default to `value=False` (hide by default)
-
-### 2. **Related Reading Feature** 📰
-- [X] Added `Episode.topics` column (pipe-separated: "topic1|topic2|topic3")
-- [X] Created `scripts/extract_topics.py` — LLM extracts 3 topic keywords from title + description + transcript preview
-- [X] Migration for `topics` in `_migrate_schema`
-- [X] Related reading section in app — links to NOS articles per topic
-- [X] Date-filtered search: Google `site:nos.nl` with `tbs=cdr:1,cd_min:...,cd_max:...` (±2 days around episode date)
-- [X] Caption indicates when results are date-filtered
-
-### 3. **Documentation**
-- [X] Updated README — Related reading, new scripts, quick start steps
-- [X] Updated ARCHITECTURE — Episode.topics, SubtitleSegment.translation_en, LLM enrichment pipeline
-- [X] Created TODO.md (this file)
-
----
-
-## 🎨 UX Suggestions for Learners
-
-### High impact
-
-| Improvement | Why | Status |
-|-------------|-----|--------|
-| **Clickable words → scroll to vocab card** | Click a word in the transcript → scroll to and expand its vocabulary card. Reduces searching. | ⏳ Partial: we have click-to-show bubble; add scroll-to-card |
-| **Mark as known / learning** | Let users mark words (known / learning / ignore) and optionally hide known words so the list focuses on new vocabulary. | Planned |
-| **Episode progress** | Show "X of Y words" or "3 new words today" to give a sense of progress. | Planned |
-
-### Medium impact
-
-| Improvement | Why | Status |
-|-------------|-----|--------|
-| **Video–subtitle sync** | When clicking a timestamp, seek the embedded video to that time instead of opening YouTube in a new tab. | Planned |
-| **Pronunciation link** | Add a link to Forvo or similar for audio pronunciation. | Planned |
-| **Transcript search** | Search box to find a word or phrase in the transcript. | Planned |
-
-### Nice to have
-
-| Improvement | Why | Status |
-|-------------|-----|--------|
-| **Export to Anki** | Export selected vocabulary as an Anki deck. | Future |
-| **Dark mode** | Toggle for dark theme. | Future |
-| **Mobile layout** | Better layout on phones and tablets. | Future |
-
-### Suggested implementation order
-
-1. **Clickable words → scroll to vocab card** — biggest usability gain (enhance existing)
-2. **Mark as known** — supports personalization and focus
-3. **Video–subtitle sync** — keeps everything in one place
+### Phase 4B: Next.js Migration (Mar 15 PM)
+- [x] FastAPI REST API (`src/api/`)
+  - `GET /api/episodes` — list with vocab counts
+  - `GET /api/episodes/{id}` — detail with segments, vocabulary, articles
+  - `GET /api/vocabulary/status` — user word statuses
+  - `PUT /api/vocabulary/{id}/status` — update word status
+  - `GET /api/health`
+- [x] Next.js + TypeScript + Tailwind project (`frontend/`)
+- [x] Episode list page (`/`) with thumbnails, dates, topic badges
+- [x] Episode detail page (`/episode/[id]`) with tabbed interface
+- [x] Clickable transcript with definition popover
+- [x] Vocabulary tab with search, sort, hide-known filter, status buttons
+- [x] Related reading tab grouped by topic
+- [x] Dark mode support (CSS variables + prefers-color-scheme)
+- [x] Buy Me a Coffee link in header (placeholder URL)
+- [x] Vercel Analytics wired up (`@vercel/analytics`)
+- [x] Vercel deployment config (`vercel.json`)
 
 ---
 
-## 🚀 Long-Term Roadmap
+## Your Action Items (manual steps)
 
-### Phase 4: Daily Quiz (Next)
-- [ ] Quiz question generation (template-based)
-- [ ] Quiz UI in Streamlit
-- [ ] UserVocabulary status (known / learning / ignored)
-- [ ] Track quiz performance
-
-### Phase 5: Personalization & UX
-- [ ] UserVocabulary persistence (mark as known / learning / ignore)
-- [ ] Known words filter (hide known words)
-- [ ] Episode progress ("X of Y words", "3 new words today")
-- [ ] Clickable words → scroll to and expand vocab card
-- [ ] Video–subtitle sync (seek embedded video on timestamp click)
-- [ ] Pronunciation link (Forvo)
-- [ ] Transcript search
-- [ ] Recurring vocabulary ranking
-- [ ] Spaced repetition (optional)
-
-### Phase 6: Public Platform & Polish (Future)
-- [ ] PostgreSQL migration
-- [ ] Multi-user, auth
-- [ ] Deployment (Render, Railway, etc.)
-- [ ] Export to Anki
-- [ ] Dark mode
-- [ ] Mobile layout
+- [ ] **Buy Me a Coffee**: Create account at buymeacoffee.com, update URL in `frontend/src/app/layout.tsx`
+- [ ] **Cron job**: Set up `crontab -e` with the daily pipeline entry (see below)
+- [ ] **Clean up .env**: Remove `GOOGLE_CSE_ID` (no longer used)
+- [ ] **Test the Next.js frontend**: Open http://localhost:3000, click through episodes
+- [ ] **Push to GitHub**: Commit all changes, push to remote
 
 ---
 
-## 📍 Current Status (Mar 14)
+## Phase 5: Polish + Deploy (Next)
 
-**What Works:**
-- ✅ Transcript fetching (YouTube Transcript API)
-- ✅ Playlist metadata (YouTube Data API)
-- ✅ Database storage (SQLite, migrations)
-- ✅ Vocabulary extraction (spaCy nl_core_news_md)
-- ✅ Dictionary lookup (Wiktionary nl, gloss_en, fallback)
-- ✅ Streamlit app: episode viewer, embedded video
-- ✅ Clickable transcript with definition bubbles (no page reload)
-- ✅ English meanings in bubbles (gloss_en, comparative forms)
-- ✅ Segment translation (OpenAI, optional)
-- ✅ Show/hide English translation toggle (default: hide)
-- ✅ Related reading with date-filtered NOS links (±2 days)
-- ✅ Topic extraction (OpenAI, optional)
-- ✅ Exclude "Journaal" from vocabulary
+The frontend exists but needs polish before going public.
 
-**Scripts:**
-- `ingest_playlist.py` — Ingest episodes
-- `extract_vocabulary.py` — NLP vocabulary extraction
-- `translate_segments.py` — LLM translation (optional)
-- `extract_topics.py` — Topic extraction for Related reading
-- `download_dictionary.py` — Wiktionary nl → Dutch/English
+### Frontend Polish
+- [ ] Responsive mobile layout testing (Tailwind already responsive, but verify)
+- [ ] Video-subtitle sync (click timestamp → seek embedded video via postMessage)
+- [ ] Loading states / skeleton UI while API data loads
+- [ ] Error boundary for failed API calls
+- [ ] Episode navigation (prev/next buttons)
+- [ ] Sidebar or header episode search
+- [ ] Favicon and Open Graph meta tags for social sharing
 
-**Optional Next Steps:**
-- ⏳ Run `extract_topics.py --all` for all episodes
-- ⏳ Phase 4: Daily quiz system
+### Backend Polish
+- [ ] CORS: update allowed origins once Vercel URL is known
+- [ ] Episode search endpoint (search by title/topic)
+- [ ] Pagination for episode list
+- [ ] Rate limiting for vocabulary status updates
+
+### Deployment
+- [ ] Push repo to GitHub
+- [ ] Deploy Next.js frontend to Vercel (free)
+- [ ] Deploy FastAPI backend to Render (free tier) or Railway
+- [ ] Set `NEXT_PUBLIC_API_URL` on Vercel to backend URL
+- [ ] Verify analytics are collecting data in Vercel dashboard
 
 ---
 
-## 💡 Quick Commands Reference
+## Phase 6: User System + Analytics
 
+- [ ] Supabase auth (email / Google login)
+- [ ] PostgreSQL migration (Supabase or Neon free tier)
+- [ ] Per-user vocabulary tracking (replace user_id=1 hardcode)
+- [ ] PostHog integration for deeper analytics
+- [ ] Learning-specific event tracking (episode views, word lookups)
+
+---
+
+## Phase 7: Quiz System
+
+- [ ] Design quiz question types (translation MC, fill-in-blank, audio)
+- [ ] Quiz generation logic (template-based + LLM for distractors)
+- [ ] Quiz page in Next.js with timer, progress bar
+- [ ] Spaced repetition scheduling (SM-2 or FSRS)
+- [ ] Quiz results history and review
+
+---
+
+## Phase 8: AI Features
+
+- [ ] RAG-based episode search (semantic search with embeddings, pgvector or ChromaDB)
+- [ ] AI-generated vocabulary explanations (context-aware, not just dictionary)
+- [ ] Personalized difficulty scoring per user
+- [ ] Streaming LLM responses in quiz explanations (SSE)
+
+---
+
+## UX Improvements (Backlog)
+
+| Improvement | Impact | Effort |
+|-------------|--------|--------|
+| Video-subtitle sync (click timestamp → seek video) | High | Medium |
+| Episode progress indicator ("12 new words") | High | Small |
+| Pronunciation audio (Forvo / Web Speech API) | Medium | Small |
+| Transcript search within episode | Medium | Small |
+| Keyboard shortcuts (arrow keys for episodes, space for play) | Medium | Small |
+| Export to Anki | Medium | Medium |
+| Word frequency across episodes ("seen in 6 episodes") | Medium | Medium |
+| Dark/light mode toggle button | Low | Small |
+
+---
+
+## Quick Reference
+
+### Start Development
 ```bash
-# Data pipeline
-python scripts/ingest_playlist.py --init-db --max-videos 5
-python scripts/extract_vocabulary.py --max 5
+# Terminal 1: API backend
+cd /path/to/dutch_news_learner
+uvicorn src.api.main:app --reload --port 8000
 
-# Dictionary (one-time)
-python scripts/download_dictionary.py
+# Terminal 2: Next.js frontend
+cd /path/to/dutch_news_learner/frontend
+npm run dev
 
-# Optional LLM enrichment (requires OPENAI_API_KEY)
-python scripts/translate_segments.py --max 5
-python scripts/extract_topics.py --max 5
-
-# App
+# Terminal 3 (optional): Streamlit (legacy)
 streamlit run app/main.py
+```
+
+### Daily Pipeline
+```bash
+# Full pipeline (one command)
+bash scripts/run_pipeline.sh
+
+# With limits
+bash scripts/run_pipeline.sh --max 3
+```
+
+### Cron Setup
+```bash
+crontab -e
+# Run daily at 20:00 (NOS uploads weekdays around 17:00-18:00)
+0 20 * * * cd /path/to/dutch_news_learner && bash scripts/run_pipeline.sh >> logs/pipeline.log 2>&1
+```
+
+### Dictionary (one-time)
+```bash
+python scripts/download_dictionary.py      # NL Wiktionary (~118MB)
+python scripts/download_dictionary_en.py   # EN Wiktionary Dutch entries
 ```
 
 ---
 
-## 🆘 If Lost Tomorrow Morning
+## Skills Demonstrated
 
-1. Read this file first
-2. Check `git status` and `git log --oneline -5`
-3. Continue from first unchecked [ ] in "Tomorrow's Plan" or "This Week's Plan"
+| Skill | Where in Project |
+|-------|------------------|
+| Python (FastAPI, SQLAlchemy, spaCy) | Backend API + NLP pipeline |
+| Next.js + TypeScript + Tailwind CSS | Frontend application |
+| LLM Application Development | Translation, topic extraction (OpenAI) |
+| REST API Design | FastAPI endpoints with Pydantic models |
+| Database Design + Migrations | SQLAlchemy models, idempotent migrations |
+| Web Scraping | DuckDuckGo search with retry/backoff |
+| NLP Pipeline | spaCy tokenization, lemmatization, POS tagging |
+| PostgreSQL + Supabase | Database + auth (Phase 6) |
+| Docker + CI/CD | Deployment automation (Phase 6) |
+| RAG / Vector Search | Semantic episode search (Phase 8) |
 
 ---
 
-## 📝 Session Notes
+## Session Notes
 
 ### Mar 14, 2026
-**Completed:**
-- Translation toggle default → hide English
-- Related reading: topics extraction, NOS links, date range (±2 days)
-- README, ARCHITECTURE, TODO.md updated
+- Translation toggle, related reading, topic extraction, documentation
 
-**Key decisions:**
-- NOS search doesn't expose date params → use Google `site:nos.nl` with `tbs=cdr:1`
-- ±2 days around episode date for relevance
-- Topics stored pipe-separated in Episode.topics
-
-_(Add notes at end of each session)_
+### Mar 15, 2026
+- UX: tab layout, bubble fix, vocab limit, dictionary enrichment (EN Wiktionary)
+- Related Reading: switched from Google CSE (403 issues) to DuckDuckGo with retry/backoff
+- Pipeline automation: `run_pipeline.sh`
+- Known words: `UserVocabulary` model + Streamlit UI
+- Next.js migration: FastAPI API (5 endpoints), Next.js frontend (8 source files)
+- Vercel Analytics + Buy Me a Coffee placeholder wired up

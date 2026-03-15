@@ -50,6 +50,9 @@ class Episode(Base):
     # Topics for related reading (pipe-separated, e.g. "olie|fatbikes|Flevoland")
     topics = Column(Text)
 
+    # Related articles JSON: [{"topic": "...", "title": "...", "url": "...", "snippet": "..."}, ...]
+    related_articles = Column(Text)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -124,6 +127,34 @@ class VocabularyItem(Base):
         return f"<VocabularyItem(lemma='{self.lemma}', pos='{self.pos}')>"
 
 
+class UserVocabulary(Base):
+    """
+    Per-user vocabulary status: known, learning, or new.
+
+    Lets learners mark words and filter out known vocabulary to focus on
+    what they're still learning. Currently single-user (user_id always 1);
+    will support multi-user after auth migration.
+    """
+
+    __tablename__ = "user_vocabulary"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, default=1, index=True)
+    vocabulary_id = Column(
+        Integer, ForeignKey("vocabulary_items.id"), nullable=False, index=True
+    )
+    status = Column(
+        String(20), nullable=False, default="new", index=True
+    )  # "new", "learning", "known"
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    vocabulary_item = relationship("VocabularyItem", backref="user_vocabulary")
+
+    def __repr__(self):
+        return f"<UserVocabulary(user={self.user_id}, vocab={self.vocabulary_id}, status='{self.status}')>"
+
+
 class EpisodeVocabulary(Base):
     """
     Junction table: which vocabulary items appear in which episode.
@@ -196,6 +227,19 @@ def _migrate_schema(engine):
         "ALTER TABLE episode_vocabulary ADD COLUMN surface_forms TEXT",
         "ALTER TABLE subtitle_segments ADD COLUMN translation_en TEXT",
         "ALTER TABLE episodes ADD COLUMN topics TEXT",
+        "ALTER TABLE episodes ADD COLUMN related_articles TEXT",
+        # UserVocabulary table for known/learning word tracking
+        """CREATE TABLE IF NOT EXISTS user_vocabulary (
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            vocabulary_id INTEGER NOT NULL REFERENCES vocabulary_items(id),
+            status VARCHAR(20) NOT NULL DEFAULT 'new',
+            created_at DATETIME,
+            updated_at DATETIME
+        )""",
+        "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_user_id ON user_vocabulary(user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_vocabulary_id ON user_vocabulary(vocabulary_id)",
+        "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_status ON user_vocabulary(status)",
     ]
     for sql in migrations:
         try:

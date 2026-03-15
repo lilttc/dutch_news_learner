@@ -15,6 +15,9 @@ spacy>=3.7.0
 # LLM (translation)
 openai>=1.0.0
 
+# Search (Related Reading)
+ddgs>=9.0.0
+
 # API & Frontend (Phase 3)
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0

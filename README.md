@@ -205,8 +205,23 @@ python scripts/enrich_vocabulary.py     # Populate translations in DB
 python scripts/translate_segments.py --max 5   # Translate subtitles to English
 python scripts/extract_topics.py --max 5       # Extract topics for Related reading
 
-# 7. Start the learning app
+# 7. Start the learning app (Streamlit — legacy)
 streamlit run app/main.py
+
+# Or: Start the Next.js frontend + FastAPI backend
+uvicorn src.api.main:app --port 8000 &
+cd frontend && npm run dev
+```
+
+### Daily Pipeline
+
+```bash
+# Process new episodes (one command)
+bash scripts/run_pipeline.sh
+
+# Schedule daily at 20:00
+crontab -e
+# 0 20 * * * cd /path/to/dutch_news_learner && bash scripts/run_pipeline.sh >> logs/pipeline.log 2>&1
 ```
 
 **Default playlist:** [Drie onderwerpen in makkelijke taal](https://www.youtube.com/playlist?list=PLO72qiQ-gJuFzpCgQcsdd4lkulqeeBMC3) — Dutch news in easy language.
@@ -221,9 +236,10 @@ streamlit run app/main.py
 | **2** | Vocabulary processing (tokenization, lemmatization, frequency) | ✅ Done |
 | **3** | Learning interface (episode viewer, clickable vocab, translation toggle) | ✅ Done |
 | **3.5** | Related reading (topic extraction, date-filtered NOS links) | ✅ Done |
-| **4** | Daily quiz system | Planned |
-| **5** | Personalization (known words, ranking, progress) | Planned |
-| **6** | Public platform (multi-user, auth, deployment) | Future |
+| **4** | Next.js + FastAPI migration | ✅ Done |
+| **5** | User system + analytics (Supabase auth, PostgreSQL) | Planned |
+| **6** | Quiz system (spaced repetition) | Planned |
+| **7** | AI features (RAG search, AI explanations) | Future |
 
 ---
 
@@ -247,5 +263,4 @@ MIT
 
 ## Author
 
-**Tanya Yi-En Chen**  
-AI Engineer / Data Scientist specializing in data pipelines, NLP systems, and AI applications.
+**[@lilttc](https://github.com/lilttc)**
