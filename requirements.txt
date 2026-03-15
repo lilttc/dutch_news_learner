@@ -1,0 +1,21 @@
+# Dutch News Learner - Dependencies
+# Install: pip install -r requirements.txt
+
+# Data Ingestion
+youtube-transcript-api>=0.6.2
+google-api-python-client>=2.0.0
+python-dotenv>=1.0.0
+
+# Database
+sqlalchemy>=2.0.0
+
+# NLP (Phase 2)
+spacy>=3.7.0
+
+# LLM (translation)
+openai>=1.0.0
+
+# API & Frontend (Phase 3)
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+streamlit>=1.28.0
