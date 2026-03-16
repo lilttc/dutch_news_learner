@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from src.models import Episode, EpisodeVocabulary, UserVocabulary
@@ -78,31 +79,37 @@ def list_episodes(
     db: Session = Depends(get_db),
 ):
     """List episodes (newest first) with vocabulary counts."""
-    episodes = (
-        db.query(Episode)
+    vocab_counts = (
+        db.query(
+            EpisodeVocabulary.episode_id,
+            func.count(EpisodeVocabulary.id).label("vocab_count"),
+        )
+        .group_by(EpisodeVocabulary.episode_id)
+        .subquery()
+    )
+
+    rows = (
+        db.query(Episode, func.coalesce(vocab_counts.c.vocab_count, 0))
+        .outerjoin(vocab_counts, Episode.id == vocab_counts.c.episode_id)
         .filter(Episode.transcript_fetched == True)  # noqa: E712
         .order_by(Episode.published_at.desc())
         .offset(offset)
         .limit(limit)
         .all()
     )
-    results = []
-    for ep in episodes:
-        vocab_count = (
-            db.query(EpisodeVocabulary)
-            .filter(EpisodeVocabulary.episode_id == ep.id)
-            .count()
-        )
-        results.append(EpisodeListItem(
+
+    return [
+        EpisodeListItem(
             id=ep.id,
             video_id=ep.video_id,
             title=ep.title,
             published_at=ep.published_at.isoformat() if ep.published_at else None,
             thumbnail_url=ep.thumbnail_url,
             topics=ep.topics,
-            vocab_count=vocab_count,
-        ))
-    return results
+            vocab_count=count,
+        )
+        for ep, count in rows
+    ]
 
 
 @router.get("/episodes/{episode_id}", response_model=EpisodeDetailOut)
