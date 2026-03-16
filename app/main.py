@@ -673,6 +673,7 @@ def main():
     selected_id = episode_options[selected_label]
     st.sidebar.markdown("---")
     st.sidebar.caption("Drie onderwerpen in makkelijke taal")
+    st.sidebar.markdown("[☕ Buy me a coffee](https://buymeacoffee.com/lilttc)")
 
     # --- Load episode data ---
     episode = load_episode_with_data(session, selected_id)
