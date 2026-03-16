@@ -67,6 +67,9 @@
 - [x] Deployed FastAPI to Render (free tier) — works but cold starts are slow
 - [x] Deployed Next.js to Vercel — connected to GitHub, auto-deploys on push
 - [x] Segment translations added for latest 5 episodes (OpenAI)
+- [x] Add Buy Me a Coffee link to Streamlit sidebar
+- [x] Fix stale DB on Streamlit Cloud — re-copy on start + 1-hour cache TTL
+- [x] Removed `dutch_glosses.json` from git tracking (replaced by SQLite)
 
 ---
 
@@ -300,3 +303,6 @@ python scripts/convert_dictionary_to_sqlite.py
 - **User testing:** found missing definitions (inflected forms), separable verbs
   not detected, requested video-timestamp seeking
 - Revised roadmap: vocabulary quality is top priority (blocks quiz system)
+- Added Buy Me a Coffee link to Streamlit sidebar
+- Fixed stale DB cache on Streamlit Cloud (re-copy on start + TTL)
+- Removed `dutch_glosses.json` from git (replaced by SQLite version)

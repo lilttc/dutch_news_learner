@@ -45,13 +45,13 @@ _SOURCE_DB = PROJECT_ROOT / "data" / "dutch_news.db"
 _TMP_DB = Path("/tmp/dutch_news.db")
 
 def _get_db_path() -> str:
-    if _TMP_DB.exists():
-        return f"sqlite:///{_TMP_DB}"
     if _SOURCE_DB.exists():
         try:
             _SOURCE_DB.open("a").close()
             return f"sqlite:///{_SOURCE_DB}"
         except OSError:
+            # Read-only filesystem (Streamlit Cloud): always re-copy so
+            # git updates are picked up after app reboots.
             shutil.copy2(_SOURCE_DB, _TMP_DB)
             return f"sqlite:///{_TMP_DB}"
     return f"sqlite:///data/dutch_news.db"
@@ -62,9 +62,9 @@ DB_PATH = _get_db_path()
 EXCLUDE_LEMMAS = {"journaal"}
 
 
-@st.cache_resource
+@st.cache_resource(ttl=3600)
 def get_db_session():
-    """Create database session (cached)."""
+    """Create database session. Cached for 1 hour, then refreshed."""
     from src.models import _migrate_schema
 
     engine = get_engine(DB_PATH)
