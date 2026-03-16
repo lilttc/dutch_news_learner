@@ -18,11 +18,12 @@ htmlcov/
 data/dictionary/nl-extract.jsonl.gz
 data/dictionary/en-wiktionary-dutch.jsonl
 data/dictionary/dutch_english_fallback.json
+data/dictionary/dutch_glosses.json
 *.sqlite
 
-# Keep these for Streamlit Cloud deployment:
-# data/dutch_news.db (25MB)
-# data/dictionary/dutch_glosses.json (63MB)
+# Keep these for deployment (Streamlit Cloud + Render):
+# data/dutch_news.db (~25MB)
+# data/dictionary/dutch_glosses.db (~65MB, converted from JSON)
 
 # Node
 node_modules/
