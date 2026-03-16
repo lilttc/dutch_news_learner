@@ -1,0 +1,12 @@
+# Slim requirements for the FastAPI API server (Render deployment).
+# Excludes spaCy, OpenAI, and ddgs which are only needed for pipeline scripts.
+
+# API framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Database
+sqlalchemy>=2.0.0
+
+# Config
+python-dotenv>=1.0.0
