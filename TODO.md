@@ -82,16 +82,47 @@ Phase 6 (Postgres + proper hosting). Not urgent — Streamlit serves well for no
 
 ---
 
-## Pick Up Here (Mar 16 evening / Mar 17)
+## Pick Up Here (Mar 17)
 
 ### Housekeeping (do first)
-- [ ] **Run daily pipeline** when new episode drops: `bash scripts/run_pipeline.sh`
-- [ ] **Push updated DB** so Streamlit Cloud + Render get new episodes
+- [x] **Run daily pipeline** for Mar 16 episode ✅
+- [x] **Push updated DB** so Streamlit Cloud + Render get new episodes ✅
 - [ ] **Set up cron job** for daily automation (see Quick Reference)
 
-### Recommended next: Quiz System (Phase 5)
-The quiz is the highest-value feature for actual learning. Build it in Streamlit
-first (the live app), then port to Next.js later.
+### Phase 5A: Vocabulary Quality (PRIORITY — blocks quiz system)
+User testing revealed missing/wrong definitions and missed verbs.
+These must be fixed before building the quiz — quizzing on bad data is worse than no quiz.
+
+**Problem 1: Missing English meanings**
+Words like "geblust", "geschrokken", "indringen" have no translation.
+The dictionary only covers base forms; inflected forms (past participles,
+conjugations) fall through.
+
+- [ ] Write `scripts/enrich_vocab_llm.py` — batch LLM fill-in for vocabulary items
+      with no translation. Use GPT-4o-mini to generate: English meaning, short Dutch
+      explanation, example sentence. Only fill where dictionary has no entry.
+- [ ] Run on all episodes, store results in `VocabularyItem.translation`
+- [ ] Add fallback chain: dictionary → LLM enrichment → "no definition"
+
+**Problem 2: Separable verbs not detected**
+"aanvallen" appears as "vallen ... aan" in text. spaCy lemmatizes to "vallen"
+(to fall) instead of "aanvallen" (to attack). Common Dutch pattern.
+
+- [ ] Build separable verb recombiner in `src/processing/vocabulary.py`
+      — detect particles (aan, op, uit, af, mee, etc.) near known verbs
+      — check if particle+verb is a known separable verb (use a list or dictionary)
+      — store the combined form as the lemma instead
+- [ ] Re-run vocabulary extraction for affected episodes
+
+### Phase 5B: Video-Transcript UX
+- [ ] **Timestamp seeks embedded video** — use YouTube iframe API `postMessage`
+      to seek the embedded player instead of opening a new tab. Applies to both
+      Streamlit (iframe postMessage in JS) and Next.js (ref to iframe).
+- [ ] **Transcript auto-scroll** (stretch) — track video currentTime via API polling,
+      highlight and scroll to the matching subtitle segment. Higher effort.
+
+### Phase 5C: Quiz System
+Build only after Phase 5A is done (vocabulary quality must be solid first).
 
 - [ ] Design quiz question types (translation multiple choice first)
 - [ ] Build quiz generation logic (`src/quiz/generator.py`)
@@ -101,10 +132,9 @@ first (the live app), then port to Next.js later.
 - [ ] Store results in `QuizSession` + `QuizItem` tables (already in schema)
 - [ ] Track quiz performance in `UserVocabulary` (times_correct, times_incorrect)
 
-### Alternative: Streamlit Polish (quick wins)
+### Streamlit Polish (quick wins, do anytime)
 - [ ] Add welcome message / episode count on homepage
 - [ ] Test mobile UX on phone, fix layout issues
-- [ ] Video-subtitle sync (click timestamp → seek embedded video)
 - [ ] Share with friends, gather feedback
 
 ---
@@ -150,7 +180,10 @@ This phase promotes the Next.js app to production and solves the data-in-git pro
 
 | Improvement | Impact | Effort |
 |-------------|--------|--------|
+| Missing translations for inflected forms | **Critical** | Medium |
+| Separable verb detection (aanvallen, opbellen) | **Critical** | Medium |
 | Video-subtitle sync (click timestamp → seek video) | High | Medium |
+| Transcript auto-scroll with video playback | High | High |
 | Episode progress indicator ("12 new words") | High | Small |
 | Pronunciation audio (Forvo / Web Speech API) | Medium | Small |
 | Transcript search within episode | Medium | Small |
@@ -264,4 +297,6 @@ python scripts/convert_dictionary_to_sqlite.py
 - Lesson learned: Render free tier (512MB RAM, cold starts) not sufficient for
   production — Streamlit remains primary app until Phase 6 (Postgres + paid hosting)
 - Added segment translations for latest episodes
-- Revised roadmap: quiz system is next priority, Postgres migration deferred
+- **User testing:** found missing definitions (inflected forms), separable verbs
+  not detected, requested video-timestamp seeking
+- Revised roadmap: vocabulary quality is top priority (blocks quiz system)
