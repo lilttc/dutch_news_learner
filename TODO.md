@@ -45,25 +45,52 @@
 - [x] Vocabulary tab with search, sort, hide-known filter, status buttons
 - [x] Related reading tab grouped by topic
 - [x] Dark mode support (CSS variables + prefers-color-scheme)
-- [x] Buy Me a Coffee link in header (placeholder URL)
+- [x] Buy Me a Coffee link in header (`https://buymeacoffee.com/lilttc`)
 - [x] Vercel Analytics wired up (`@vercel/analytics`)
 - [x] Vercel deployment config (`vercel.json`)
 
+### Phase 4C: Deployment + Cleanup (Mar 15 Evening)
+- [x] Anonymized repo (removed personal name/paths from README, TODO, scripts)
+- [x] Comprehensive `.gitignore` (root + frontend)
+- [x] Pushed to GitHub: `lilttc/dutch_news_learner` (public)
+- [x] Streamlit Community Cloud deployment (live)
+- [x] SQLite read-only fix for Streamlit Cloud (copy DB to `/tmp/`)
+- [x] Mobile bubble responsiveness (`max-width: 90vw`)
+- [x] Buy Me a Coffee account created
+
 ---
 
-## Your Action Items (manual steps)
+## Pick Up Here (Mar 16)
 
-- [x] **Buy Me a Coffee**: https://buymeacoffee.com/lilttc — URL updated in `frontend/src/app/layout.tsx`
-- [ ] **Cron job**: Set up `crontab -e` with the daily pipeline entry (see below)
+### Before starting new features
+- [ ] **Run daily pipeline** — new episode may be available (Monday): `bash scripts/run_pipeline.sh`
+- [ ] **Push updated DB** after pipeline so Streamlit Cloud gets new episodes
+- [ ] **Cron job**: Set up `crontab -e` for daily automation (see Quick Reference)
 - [ ] **Clean up .env**: Remove `GOOGLE_CSE_ID` (no longer used)
-- [ ] **Test the Next.js frontend**: Open http://localhost:3000, click through episodes
-- [ ] **Push to GitHub**: Commit all changes, push to remote
+- [ ] **Test the Next.js frontend locally**: `uvicorn src.api.main:app --port 8000` + `cd frontend && npm run dev`, open http://localhost:3000
+
+### Decide next focus
+Choose one of the following directions for Mar 16:
+
+**Option A: Streamlit Polish** (quick wins, improve what's live now)
+- Improve Streamlit mobile UX (test on phone, fix any issues)
+- Add episode count / welcome message on the deployed app
+- Verify the app works well for friends, gather feedback
+
+**Option B: Next.js + Vercel Deployment** (move to production frontend)
+- Deploy FastAPI backend to Render (free tier)
+- Deploy Next.js frontend to Vercel (free)
+- Wire up `NEXT_PUBLIC_API_URL` → backend
+- This replaces Streamlit as the public-facing app
+
+**Option C: Quiz System** (new feature, high learning value)
+- Design quiz question types
+- Build quiz generation logic
+- Add quiz page to Next.js or Streamlit
 
 ---
 
-## Phase 5: Polish + Deploy (Next)
-
-The frontend exists but needs polish before going public.
+## Phase 5: Polish + Deploy
 
 ### Frontend Polish
 - [ ] Responsive mobile layout testing (Tailwind already responsive, but verify)
@@ -80,10 +107,9 @@ The frontend exists but needs polish before going public.
 - [ ] Pagination for episode list
 - [ ] Rate limiting for vocabulary status updates
 
-### Deployment
-- [ ] Push repo to GitHub
-- [ ] Deploy Next.js frontend to Vercel (free)
+### Deployment (Next.js + FastAPI)
 - [ ] Deploy FastAPI backend to Render (free tier) or Railway
+- [ ] Deploy Next.js frontend to Vercel (free)
 - [ ] Set `NEXT_PUBLIC_API_URL` on Vercel to backend URL
 - [ ] Verify analytics are collecting data in Vercel dashboard
 
@@ -156,6 +182,11 @@ bash scripts/run_pipeline.sh
 
 # With limits
 bash scripts/run_pipeline.sh --max 3
+
+# After pipeline, push updated DB for Streamlit Cloud
+git add data/dutch_news.db
+git commit -m "Update DB with new episodes"
+git push origin main
 ```
 
 ### Cron Setup
@@ -171,6 +202,11 @@ python scripts/download_dictionary.py      # NL Wiktionary (~118MB)
 python scripts/download_dictionary_en.py   # EN Wiktionary Dutch entries
 ```
 
+### Deployment URLs
+- **Streamlit (live)**: check Streamlit Cloud dashboard
+- **GitHub**: https://github.com/lilttc/dutch_news_learner
+- **Buy Me a Coffee**: https://buymeacoffee.com/lilttc
+
 ---
 
 ## Skills Demonstrated
@@ -184,6 +220,7 @@ python scripts/download_dictionary_en.py   # EN Wiktionary Dutch entries
 | Database Design + Migrations | SQLAlchemy models, idempotent migrations |
 | Web Scraping | DuckDuckGo search with retry/backoff |
 | NLP Pipeline | spaCy tokenization, lemmatization, POS tagging |
+| Streamlit Deployment | Streamlit Community Cloud with SQLite |
 | PostgreSQL + Supabase | Database + auth (Phase 6) |
 | Docker + CI/CD | Deployment automation (Phase 6) |
 | RAG / Vector Search | Semantic episode search (Phase 8) |
@@ -201,4 +238,7 @@ python scripts/download_dictionary_en.py   # EN Wiktionary Dutch entries
 - Pipeline automation: `run_pipeline.sh`
 - Known words: `UserVocabulary` model + Streamlit UI
 - Next.js migration: FastAPI API (5 endpoints), Next.js frontend (8 source files)
-- Vercel Analytics + Buy Me a Coffee placeholder wired up
+- Vercel Analytics + Buy Me a Coffee wired up
+- Anonymized repo, pushed to GitHub (public)
+- Deployed to Streamlit Community Cloud (fixed read-only SQLite)
+- Buy Me a Coffee account: https://buymeacoffee.com/lilttc
