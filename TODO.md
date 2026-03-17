@@ -1,6 +1,6 @@
 # Dutch News Learner TODO
 
-**Last Updated:** 2026-03-16 (afternoon)
+**Last Updated:** 2026-03-17 (afternoon)
 
 ---
 
@@ -90,7 +90,7 @@ Phase 6 (Postgres + proper hosting). Not urgent — Streamlit serves well for no
 ### Housekeeping (do first)
 - [x] **Run daily pipeline** for Mar 16 episode ✅
 - [x] **Push updated DB** so Streamlit Cloud + Render get new episodes ✅
-- [ ] **Set up cron job** for daily automation (see Quick Reference)
+- [~] **Cron job** — deferred. Machine not always on; manually running `run_pipeline.sh` for now.
 
 ### Phase 5A: Vocabulary Quality (PRIORITY — blocks quiz system)
 User testing revealed missing/wrong definitions and missed verbs.
@@ -106,7 +106,7 @@ conjugations) fall through.
       Batches 25 words per API call, includes POS + example sentence for context.
       Only fills where dictionary has no entry.
 - [x] Added to pipeline: `run_pipeline.sh` step 4/7 (after dictionary, before translation)
-- [ ] **Run:** `python scripts/enrich_vocab_llm.py --all` (or `--dry-run` to preview)
+- [x] **Run:** `python scripts/enrich_vocab_llm.py --all` ✅
 
 **Problem 2: Separable verbs not detected** ✅ SOLVED
 "aanvallen" appears as "vallen ... aan" in text. spaCy lemmatizes to "vallen"
@@ -118,8 +118,8 @@ conjugations) fall through.
       — Both validate combined form against dictionary DB to avoid false positives
 - [x] Integrated into `VocabularyExtractor` — enabled when dictionary is loaded
 - [x] Updated `scripts/extract_vocabulary.py` to pass dictionary lookup to extractor
-- [ ] **Run:** `python scripts/extract_vocabulary.py --all` to re-extract with separable verbs
-- [ ] **Then:** `python scripts/enrich_vocab_llm.py --all` to fill new words' translations
+- [x] **Run:** `python scripts/extract_vocabulary.py --all` ✅ re-extracted with separable verbs
+- [x] **Then:** `python scripts/enrich_vocab_llm.py --all` ✅ filled new words' translations
 
 ### Phase 5B: Video-Transcript UX
 - [x] **Timestamp seeks embedded video** ✅ — uses YouTube iframe API `postMessage`
@@ -190,23 +190,22 @@ This phase promotes the Next.js app to production and solves the data-in-git pro
 
 ## UX Improvements (Backlog)
 
-| Improvement | Impact | Effort |
-|-------------|--------|--------|
-| Missing translations for inflected forms | **Critical** | Medium |
-| Separable verb detection (aanvallen, opbellen) | **Critical** | Medium |
-| Video-subtitle sync (click timestamp → seek video) | High | Medium |
-| Transcript auto-scroll with video playback | High | High |
-| Episode progress indicator ("12 new words") | High | Small |
-| Pronunciation audio (Forvo / Web Speech API) | Medium | Small |
-| Transcript search within episode | Medium | Small |
-| Keyboard shortcuts (arrow keys for episodes, space for play) | Medium | Small |
-| Export to Anki | Medium | Medium |
-| Word frequency across episodes ("seen in 6 episodes") | Medium | Medium |
-| Dark/light mode toggle button | Low | Small |
-| Error boundary for failed API calls (Next.js) | Medium | Small |
-| Loading states / skeleton UI (Next.js) | Medium | Small |
-| Episode navigation — prev/next buttons | Medium | Small |
-| Favicon and Open Graph meta tags | Low | Small |
+| Improvement | Impact | Effort | Status |
+|-------------|--------|--------|--------|
+| ~~Missing translations for inflected forms~~ | Critical | Medium | ✅ Done (LLM enrichment) |
+| ~~Separable verb detection (aanvallen, opbellen)~~ | Critical | Medium | ✅ Done (SeparableVerbRecombiner) |
+| ~~Video-subtitle sync (click timestamp → seek video)~~ | High | Medium | ✅ Done (postMessage API) |
+| Transcript auto-scroll with video playback | High | High | |
+| Episode progress indicator ("12 new words") | High | Small | |
+| Pronunciation audio (Forvo / Web Speech API) | Medium | Small | |
+| Transcript search within episode | Medium | Small | |
+| Keyboard shortcuts (arrow keys for episodes, space for play) | Medium | Small | |
+| Export to Anki | Medium | Medium | |
+| Word frequency across episodes ("seen in 6 episodes") | Medium | Medium | |
+| Error boundary for failed API calls (Next.js) | Medium | Small | |
+| Loading states / skeleton UI (Next.js) | Medium | Small | |
+| Episode navigation — prev/next buttons | Medium | Small | |
+| Favicon and Open Graph meta tags | Low | Small | |
 
 ---
 
@@ -315,3 +314,24 @@ python scripts/convert_dictionary_to_sqlite.py
 - Added Buy Me a Coffee link to Streamlit sidebar
 - Fixed stale DB cache on Streamlit Cloud (re-copy on start + TTL)
 - Removed `dutch_glosses.json` from git (replaced by SQLite version)
+
+### Mar 17, 2026
+- **Phase 5A: Vocabulary quality** (code + execution)
+  - `scripts/enrich_vocab_llm.py` — batch GPT-4o-mini enrichment for words the
+    dictionary misses. 25 words/batch, POS + example sentence context. Fills
+    `VocabularyItem.translation` for inflected forms, rare words.
+  - `SeparableVerbRecombiner` — detects split separable verbs via spaCy dep
+    parsing + end-of-clause heuristic. Validates against dictionary to prevent
+    false positives. Integrated into VocabularyExtractor.
+  - Updated `extract_vocabulary.py` to pass dictionary to extractor.
+  - Updated `run_pipeline.sh` from 5 → 7 steps (dictionary + LLM enrichment).
+  - Ran all scripts on all episodes — vocabulary quality significantly improved.
+- **Phase 5B: Timestamp seeking**
+  - Streamlit: transcript component uses `window.parent.document` to find YouTube
+    iframe, sends `postMessage` commands (`seekTo` + `playVideo`). Fallback to new tab.
+  - Next.js: iframe ref in EpisodeView, `seekTo` callback passed to Transcript.
+  - Both: `enablejsapi=1` on embed URL.
+- Updated README (roadmap, project structure, tech stack, features, quick start)
+- Updated ARCHITECTURE (enrichment chain, separable verbs, data model ERD,
+  processing module, API layer, dependencies, design decisions)
+- Next: Phase 5C (Quiz system)

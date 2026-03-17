@@ -38,19 +38,17 @@ The goal is to help learners acquire real-world Dutch vocabulary through repeate
 The homepage displays the latest news episode and acts as the main learning entrypoint.
 
 - Embedded YouTube video
-- Subtitle transcript with timestamps
-- Clickable vocabulary
-- Episode summary
-- Extracted vocabulary list
+- Subtitle transcript with clickable timestamps (seeks video in-page)
+- Clickable vocabulary with definition pop-ups
+- Extracted vocabulary list with status tracking
 
 **Learning flow:** Open today's episode → watch video → read subtitles → click unknown words → save vocabulary → take daily quiz
 
 ### Subtitle-Driven Learning
 
 - Sentence-level subtitle display
-- Timestamps linked to video playback
+- Clickable timestamps seek the embedded video (no new tab)
 - Clickable vocabulary inside subtitles (click-to-show definition bubble)
-- Replay from subtitle timestamps
 - Optional English translations per segment (LLM-generated, toggle show/hide)
 
 ### Vocabulary Extraction
@@ -58,10 +56,19 @@ The homepage displays the latest news episode and acts as the main learning entr
 Automatic extraction of candidate vocabulary from each episode:
 
 - Word form, lemma, translation
-- Example sentence, short explanation
-- Frequency count, difficulty estimate
+- Example sentence from episode context
+- Frequency count per episode
+- Separable verb recombination (e.g. "vallen ... aan" → "aanvallen")
 
-Users can mark words as: **known** | **learning** | **saved for review**
+Users can mark words as: **known** | **learning** | **new**
+
+### Vocabulary Enrichment
+
+Three-tier translation pipeline ensures high coverage:
+
+1. **Wiktionary dictionary** (NL + EN editions, stored as SQLite) — covers base forms
+2. **LLM fallback** (GPT-4o-mini) — fills gaps for inflected forms, rare words
+3. **Manual lookup links** (Mijnwoordenboek, Woorden.org, Wiktionary)
 
 ### Personal Vocabulary Tracker
 
@@ -98,7 +105,7 @@ Episodes indexed by date with calendar-style browsing to revisit older episodes 
 
 ### Related Reading
 
-For each episode, topic keywords are extracted (LLM) and linked to NOS search. Results are filtered to ±2 days around the episode date for more relevant news articles.
+For each episode, topic keywords are extracted (LLM) and linked to NOS articles via DuckDuckGo search. Results are filtered to ±7 days around the episode date for relevance.
 
 ### Non-Goals (v1)
 
@@ -109,21 +116,24 @@ To keep the project focused, v1 intentionally avoids:
 - Speech recognition
 - Complex grammar analysis
 - Agent workflows
-- Heavy reliance on LLMs (except for optional segment translation and topic extraction)
 
 ---
 
 ## Tech Stack
 
-### Personal Version (MVP)
+### Current Stack
 
 | Layer | Technology |
 |-------|------------|
 | Backend | Python 3.11+, FastAPI |
-| Database | SQLite |
-| NLP | spaCy (nl_core_news_md) |
+| Database | SQLite (data) + SQLite (dictionary) |
+| NLP | spaCy (nl_core_news_md), separable verb recombination |
+| Dictionary | Wiktionary NL + EN editions (POS-aware, SQLite) |
+| LLM | OpenAI GPT-4o-mini (translation, topic extraction, vocab enrichment) |
 | Ingestion | youtube-transcript-api, YouTube Data API v3 |
-| Frontend | Streamlit |
+| Search | DuckDuckGo (related NOS articles) |
+| Frontend (primary) | Streamlit |
+| Frontend (staging) | Next.js + TypeScript + Tailwind CSS |
 
 ### Public Platform (Future)
 
@@ -132,7 +142,7 @@ To keep the project focused, v1 intentionally avoids:
 | Backend | FastAPI, PostgreSQL |
 | Frontend | Next.js |
 | Infrastructure | Docker, background job scheduler |
-| Auth | TBD (Auth0 / Supabase) |
+| Auth | TBD (Supabase) |
 
 ---
 
@@ -140,32 +150,51 @@ To keep the project focused, v1 intentionally avoids:
 
 ```
 dutch_news_learner/
-├── README.md                 # This file
-├── ARCHITECTURE.md            # System design & data flow
-├── requirements.txt
+├── README.md                          # This file
+├── ARCHITECTURE.md                     # System design & data flow
+├── TODO.md                             # Development log & roadmap
+├── requirements.txt                    # Full dependencies (incl. spaCy)
+├── requirements-api.txt                # Slim API deps (no spaCy, for Render)
 ├── .env.example
 │
 ├── src/
-│   ├── ingestion/             # YouTube & transcript pipeline
-│   ├── processing/            # NLP, vocabulary extraction
-│   ├── models/                # SQLAlchemy models
-│   ├── api/                   # FastAPI routes
-│   └── quiz/                  # Quiz generation logic
+│   ├── ingestion/                      # YouTube & transcript pipeline
+│   │   └── youtube.py                  # Playlist + transcript fetchers
+│   ├── processing/                     # NLP pipeline
+│   │   └── vocabulary.py               # VocabularyExtractor + SeparableVerbRecombiner
+│   ├── dictionary/                     # Wiktionary lookup (SQLite + JSON backends)
+│   │   └── lookup.py                   # DictionaryLookup (POS-aware, EN glosses)
+│   ├── models/                         # SQLAlchemy models
+│   │   └── db.py                       # Episode, SubtitleSegment, VocabularyItem, etc.
+│   └── api/                            # FastAPI REST API
+│       ├── main.py                     # App + CORS
+│       ├── deps.py                     # DB engine singleton
+│       └── routes/                     # episodes, vocabulary endpoints
 │
 ├── scripts/
-│   ├── ingest_playlist.py     # Ingest NOS episodes
-│   ├── extract_vocabulary.py  # Run NLP pipeline
-│   ├── translate_segments.py  # LLM translation (optional)
-│   ├── extract_topics.py     # Topic extraction for Related reading
-│   ├── download_dictionary.py # Wiktionary nl → Dutch/English glosses
-│   └── init_db.py             # Database setup
+│   ├── run_pipeline.sh                 # Daily pipeline (7 steps, one command)
+│   ├── ingest_playlist.py              # Ingest NOS episodes from YouTube
+│   ├── extract_vocabulary.py           # spaCy NLP + separable verb detection
+│   ├── enrich_vocabulary.py            # Dictionary-based translation fill
+│   ├── enrich_vocab_llm.py             # LLM fallback for missing translations
+│   ├── translate_segments.py           # Segment translation (OpenAI)
+│   ├── extract_topics.py              # Topic extraction (OpenAI)
+│   ├── fetch_related_articles.py       # DuckDuckGo NOS article search
+│   ├── download_dictionary.py          # NL Wiktionary download
+│   ├── download_dictionary_en.py       # EN Wiktionary Dutch entries
+│   ├── convert_dictionary_to_sqlite.py # JSON → SQLite dictionary conversion
+│   └── query_db.py                     # Database inspection utility
 │
-├── app/                       # Streamlit frontend
+├── app/                                # Streamlit frontend (primary)
 │   └── main.py
 │
-├── data/                      # Local data (gitignored)
-│   ├── dutch_news.db
-│   └── frequency_lists/       # Subtlex-NL, etc.
+├── frontend/                           # Next.js frontend (staging)
+│   ├── src/app/                        # Pages (episode list, episode detail)
+│   └── src/components/                 # EpisodeView, Transcript, VocabularyList
+│
+├── data/                               # Local data (gitignored)
+│   ├── dutch_news.db                   # Main database
+│   └── dictionary/dutch_glosses.db     # Wiktionary dictionary (SQLite)
 │
 └── tests/
 ```
@@ -185,27 +214,32 @@ dutch_news_learner/
 ```bash
 # 1. Install dependencies
 pip install -r requirements.txt
+python -m spacy download nl_core_news_md
 
 # 2. Configure environment
 cp .env.example .env
-# Edit .env: YOUTUBE_API_KEY=your_key
+# Edit .env: YOUTUBE_API_KEY=your_key, OPENAI_API_KEY=your_key (optional)
 
-# 3. Ingest episodes (uses default playlist: Drie onderwerpen in makkelijke taal)
+# 3. Download dictionary (one-time, ~118MB)
+python scripts/download_dictionary.py
+python scripts/download_dictionary_en.py
+python scripts/convert_dictionary_to_sqlite.py
+
+# 4. Ingest episodes
 python scripts/ingest_playlist.py --init-db --max-videos 5
 
-# 4. Extract vocabulary (Phase 2 — requires spaCy Dutch model)
-python -m spacy download nl_core_news_md
+# 5. Extract vocabulary (with separable verb detection)
 python scripts/extract_vocabulary.py --max 5
 
-# 5. (Optional) Download dictionary for embedded translations
-python scripts/download_dictionary.py   # ~118MB download, one-time. POS-aware for correct meanings.
-python scripts/enrich_vocabulary.py     # Populate translations in DB
+# 6. Enrich translations (dictionary first, then LLM for gaps)
+python scripts/enrich_vocabulary.py
+python scripts/enrich_vocab_llm.py --all   # Requires OPENAI_API_KEY
 
-# 6. (Optional) Segment translation & topic extraction (requires OPENAI_API_KEY)
-python scripts/translate_segments.py --max 5   # Translate subtitles to English
-python scripts/extract_topics.py --max 5       # Extract topics for Related reading
+# 7. (Optional) Segment translation & topic extraction
+python scripts/translate_segments.py --max 5
+python scripts/extract_topics.py --max 5
 
-# 7. Start the learning app (Streamlit — legacy)
+# 8. Start the learning app
 streamlit run app/main.py
 
 # Or: Start the Next.js frontend + FastAPI backend
@@ -236,9 +270,11 @@ crontab -e
 | **2** | Vocabulary processing (tokenization, lemmatization, frequency) | ✅ Done |
 | **3** | Learning interface (episode viewer, clickable vocab, translation toggle) | ✅ Done |
 | **3.5** | Related reading (topic extraction, date-filtered NOS links) | ✅ Done |
-| **4** | Next.js + FastAPI migration | ✅ Done |
-| **5** | User system + analytics (Supabase auth, PostgreSQL) | Planned |
-| **6** | Quiz system (spaced repetition) | Planned |
+| **4** | Next.js + FastAPI migration, deployment (Vercel + Render + Streamlit Cloud) | ✅ Done |
+| **5A** | Vocabulary quality (LLM enrichment, separable verb detection) | ✅ Done |
+| **5B** | Video-transcript UX (in-page timestamp seeking) | ✅ Done |
+| **5C** | Quiz system (translation multiple choice, spaced repetition) | Up next |
+| **6** | PostgreSQL + proper hosting + user auth | Planned |
 | **7** | AI features (RAG search, AI explanations) | Future |
 
 ---

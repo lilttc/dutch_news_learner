@@ -96,28 +96,59 @@ Raw transcript (list of segments)
 Candidate vocabulary list
 ```
 
-### 2.3 Vocabulary Enrichment
+### 2.3 Separable Verb Recombination
+
+Dutch separable verbs (scheidbare werkwoorden) split in main clauses:
+"aanvallen" (to attack) → "Daarom **vallen** ze gebouwen **aan**".
+
+The `SeparableVerbRecombiner` detects these and stores the combined lemma:
 
 ```
-Candidate vocabulary (lemma + count + example)
+spaCy Doc (tokenized sentence)
         │
-        ├─────────────────────────────────────┐
-        │                                     │
-        ▼                                     ▼
-┌───────────────────┐               ┌───────────────────┐
-│ Frequency lookup  │               │ Translation       │
-│ (Subtlex-NL)      │               │ (WordNet / API)   │
-│ → CEFR estimate   │               │ → English meaning │
-│ → Difficulty rank │               │                   │
-└─────────┬─────────┘               └─────────┬─────────┘
-          │                                     │
-          └─────────────────┬───────────────────┘
+        ├── Strategy 1: Dependency parsing
+        │   Tokens with dep label 'svp' / 'compound:prt'
+        │   whose head is a VERB → combine particle + verb lemma
+        │
+        ├── Strategy 2: End-of-clause heuristic
+        │   Known particle as last content token before punctuation
+        │   + verb earlier in sentence → combine if valid
+        │
+        └── Validation: combined form must exist as VERB in dictionary
+                         (prevents false positives like "op" + "lopen")
                             │
                             ▼
-              Enriched VocabularyItem
+              verb_overrides: {token.i → combined_lemma}
 ```
 
-### 2.4 Cross-Episode Frequency
+### 2.4 Vocabulary Enrichment
+
+Three-tier translation pipeline fills `VocabularyItem.translation`:
+
+```
+Candidate vocabulary (lemma + POS + example sentence)
+        │
+        ▼
+┌───────────────────────────────┐
+│ Tier 1: Wiktionary Dictionary │  POS-aware lookup (NL + EN editions)
+│ (dutch_glosses.db — SQLite)   │  Covers base forms reliably
+└─────────────┬─────────────────┘
+              │ words with no match
+              ▼
+┌───────────────────────────────┐
+│ Tier 2: LLM Enrichment       │  GPT-4o-mini, batches of 25
+│ (enrich_vocab_llm.py)        │  Uses POS + example sentence for context
+│                               │  Fills inflected forms, rare words
+└─────────────┬─────────────────┘
+              │ still no match
+              ▼
+┌───────────────────────────────┐
+│ Tier 3: Manual Lookup Links   │  Mijnwoordenboek, Woorden.org, Wiktionary
+│ (shown in definition bubble)  │  User clicks to look up externally
+└───────────────────────────────┘
+```
+
+### 2.5 Cross-Episode Frequency
 
 ```
 Episode 1 vocab ──┐
@@ -129,7 +160,7 @@ Episode 3 vocab ──┤    → episode_count, total_count
               Recurring vocabulary ranking
 ```
 
-### 2.5 Optional LLM Enrichment
+### 2.6 Optional LLM Enrichment
 
 ```
 Episode (title, description, transcript)
@@ -145,8 +176,8 @@ Episode (title, description, transcript)
 └───────────────────┘               └─────────┬─────────┘
                                               │
                                               ▼
-                                    Related reading: Google search
-                                    site:nos.nl, date ±2 days
+                                    Related reading: DuckDuckGo search
+                                    site:nos.nl, date ±7 days
 ```
 
 ---
@@ -156,45 +187,47 @@ Episode (title, description, transcript)
 ### 3.1 Entity Relationship Diagram
 
 ```
-┌─────────────────┐       ┌─────────────────────┐       ┌──────────────────┐
-│    Episode      │       │  SubtitleSegment    │       │  VocabularyItem  │
-├─────────────────┤       ├─────────────────────┤       ├──────────────────┤
-│ id (PK)         │───┐   │ id (PK)             │       │ id (PK)          │
-│ video_id        │   │   │ episode_id (FK)      │       │ lemma (unique)    │
-│ title           │   └──│ start_time           │       │ pos               │
-│ published_at    │      │ end_time             │       │ translation       │
-│ summary         │      │ text                 │       │ frequency_rank    │
-│ thumbnail_url   │      │ normalized_text      │       │ cefr_level        │
-└────────┬────────┘      └─────────────────────┘       └────────┬─────────┘
-         │                                                       │
-         │              ┌─────────────────────┐                  │
-         │              │ EpisodeVocabulary   │                  │
-         └──────────────│ episode_id (FK)     │◀─────────────────┘
+┌──────────────────┐       ┌─────────────────────┐       ┌──────────────────┐
+│    Episode       │       │  SubtitleSegment    │       │  VocabularyItem  │
+├──────────────────┤       ├─────────────────────┤       ├──────────────────┤
+│ id (PK)          │───┐   │ id (PK)             │       │ id (PK)          │
+│ video_id         │   │   │ episode_id (FK)      │       │ lemma (unique)    │
+│ title            │   └──│ start_time           │       │ pos               │
+│ published_at     │      │ duration             │       │ translation       │
+│ thumbnail_url    │      │ text                 │       │ frequency_rank    │
+│ topics           │      │ translation_en       │       │ cefr_level        │
+│ related_articles │      └─────────────────────┘       └────────┬─────────┘
+└────────┬─────────┘                                              │
+         │              ┌─────────────────────┐                   │
+         │              │ EpisodeVocabulary   │                   │
+         └──────────────│ episode_id (FK)     │◀──────────────────┘
                         │ vocabulary_id (FK)  │
                         │ occurrence_count    │
                         │ example_sentence    │
                         │ example_timestamp   │
+                        │ surface_forms       │
                         └─────────────────────┘
-                                    
+
 ┌──────────────────┐       ┌─────────────────────┐
 │  UserVocabulary  │       │  QuizSession        │
 ├──────────────────┤       ├─────────────────────┤
 │ id (PK)          │       │ id (PK)             │
-│ vocabulary_id(FK)│       │ user_id             │
-│ status           │       │ quiz_date           │
-│ first_seen_at    │       │ score                │
-│ last_reviewed_at │       │ duration_seconds    │
-│ times_seen       │       └──────────┬──────────┘
-│ times_correct    │                  │
-│ times_incorrect  │       ┌──────────▼──────────┐
-└──────────────────┘       │  QuizItem           │
-                           ├─────────────────────┤
+│ user_id          │       │ user_id             │
+│ vocabulary_id(FK)│       │ quiz_date           │
+│ status           │       │ score                │
+│ created_at       │       │ duration_seconds    │
+│ updated_at       │       └──────────┬──────────┘
+└──────────────────┘                  │
+                           ┌──────────▼──────────┐
+  Status: new | learning   │  QuizItem           │
+         | known           ├─────────────────────┤
                            │ session_id (FK)     │
                            │ vocabulary_id (FK)  │
                            │ question_type       │
                            │ user_answer         │
                            │ is_correct          │
                            └─────────────────────┘
+  (QuizSession + QuizItem are designed but not yet implemented)
 ```
 
 ### 3.2 Table Definitions
@@ -307,10 +340,11 @@ src/ingestion/
 ```
 src/processing/
 ├── __init__.py
-├── tokenizer.py        # spaCy pipeline wrapper
-├── vocabulary.py       # Extract, filter, aggregate vocabulary
-├── enrichment.py       # Frequency lookup, translation
-└── frequency.py        # Cross-episode frequency calculation
+└── vocabulary.py       # VocabularyExtractor + SeparableVerbRecombiner
+
+src/dictionary/
+├── __init__.py
+└── lookup.py           # DictionaryLookup (SQLite + JSON backends, POS-aware)
 ```
 
 ### 5.3 API Layer
@@ -318,13 +352,11 @@ src/processing/
 ```
 src/api/
 ├── __init__.py
-├── main.py             # FastAPI app
-├── routes/
-│   ├── episodes.py     # GET /episodes, GET /episodes/{id}
-│   ├── vocabulary.py   # GET /vocabulary, POST /vocabulary/{id}/status
-│   ├── quiz.py         # GET /quiz/today, POST /quiz/submit
-│   └── user.py         # GET /user/progress
-└── schemas.py          # Pydantic models
+├── main.py             # FastAPI app + CORS
+├── deps.py             # DB engine singleton
+└── routes/
+    ├── episodes.py     # GET /api/episodes, GET /api/episodes/{id}
+    └── vocabulary.py   # GET /api/vocabulary/status, PUT /api/vocabulary/{id}/status
 ```
 
 ### 5.4 Frontend (Streamlit)
@@ -342,11 +374,11 @@ app/
 | Dependency | Purpose | Notes |
 |------------|---------|-------|
 | **YouTube Data API v3** | Playlist metadata | Requires API key |
-| **youtube-transcript-api** | Subtitle extraction | No key, may need updates |
-| **spaCy nl_core_news_md** | Dutch NLP | ~50MB model |
-| **Subtlex-NL** | Word frequency | Offline CSV/JSON |
-| **Open Dutch WordNet** | Translations | Optional, offline |
-| **OpenAI API** | Segment translation, topic extraction | Optional, for translation_en and Episode.topics |
+| **youtube-transcript-api** | Subtitle extraction | No key required |
+| **spaCy nl_core_news_md** | Dutch NLP (tokenize, lemmatize, POS, dep parse) | ~50MB model |
+| **Wiktionary NL + EN** | Dictionary (glosses, POS-aware) | Downloaded once, stored as SQLite |
+| **OpenAI API (GPT-4o-mini)** | Segment translation, topic extraction, vocab enrichment | Optional but recommended |
+| **DuckDuckGo (ddgs)** | Related NOS article search | No key required, rate-limited with backoff |
 
 ---
 
@@ -375,7 +407,10 @@ app/
 |----------|-----------|
 | spaCy over NLTK/Stanza | Good Dutch support, fast, production-ready |
 | SQLite for MVP | Zero setup, sufficient for single user |
-| Streamlit for MVP | Rapid iteration, Python-only, familiar from tai8bot |
+| Streamlit for MVP | Rapid iteration, Python-only |
+| Next.js for public app | Modern UX, Vercel hosting, dark mode |
+| Dictionary + LLM fallback | Dictionary covers base forms cheaply; LLM fills inflected/rare words |
+| Separable verb recombiner | Dep parsing + heuristic + dictionary validation avoids false positives |
 | Template quizzes first | Reliable, no LLM cost, validates core loop |
 | Frequency-based ranking | Recurring words = high-value learning targets |
 | Episode-level vocabulary | Granular enough for context, manageable size |
