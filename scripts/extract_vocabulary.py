@@ -22,6 +22,7 @@ from typing import Optional, Tuple
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from src.dictionary import get_lookup
 from src.models import (
     Base,
     Episode,
@@ -147,9 +148,17 @@ def run_extraction(
     print("Dutch News Learner — Vocabulary Extraction")
     print("=" * 70)
     print(f"Episodes to process: {len(episodes)}")
+
+    # Load dictionary for separable verb recombination
+    lookup = get_lookup()
+    if lookup.is_loaded:
+        print("Dictionary loaded — separable verb recombination enabled")
+    else:
+        print("Dictionary not found — separable verb recombination disabled")
+        lookup = None
     print()
 
-    extractor = VocabularyExtractor()
+    extractor = VocabularyExtractor(dictionary_lookup=lookup)
     total_items = 0
     total_rows = 0
 

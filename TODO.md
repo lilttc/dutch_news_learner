@@ -96,31 +96,40 @@ Phase 6 (Postgres + proper hosting). Not urgent — Streamlit serves well for no
 User testing revealed missing/wrong definitions and missed verbs.
 These must be fixed before building the quiz — quizzing on bad data is worse than no quiz.
 
-**Problem 1: Missing English meanings**
+**Problem 1: Missing English meanings** ✅ SOLVED
 Words like "geblust", "geschrokken", "indringen" have no translation.
 The dictionary only covers base forms; inflected forms (past participles,
 conjugations) fall through.
 
-- [ ] Write `scripts/enrich_vocab_llm.py` — batch LLM fill-in for vocabulary items
-      with no translation. Use GPT-4o-mini to generate: English meaning, short Dutch
-      explanation, example sentence. Only fill where dictionary has no entry.
-- [ ] Run on all episodes, store results in `VocabularyItem.translation`
-- [ ] Add fallback chain: dictionary → LLM enrichment → "no definition"
+- [x] Write `scripts/enrich_vocab_llm.py` — batch LLM fill-in for vocabulary items
+      with no translation. Uses GPT-4o-mini to generate concise English definitions.
+      Batches 25 words per API call, includes POS + example sentence for context.
+      Only fills where dictionary has no entry.
+- [x] Added to pipeline: `run_pipeline.sh` step 4/7 (after dictionary, before translation)
+- [ ] **Run:** `python scripts/enrich_vocab_llm.py --all` (or `--dry-run` to preview)
 
-**Problem 2: Separable verbs not detected**
+**Problem 2: Separable verbs not detected** ✅ SOLVED
 "aanvallen" appears as "vallen ... aan" in text. spaCy lemmatizes to "vallen"
 (to fall) instead of "aanvallen" (to attack). Common Dutch pattern.
 
-- [ ] Build separable verb recombiner in `src/processing/vocabulary.py`
-      — detect particles (aan, op, uit, af, mee, etc.) near known verbs
-      — check if particle+verb is a known separable verb (use a list or dictionary)
-      — store the combined form as the lemma instead
-- [ ] Re-run vocabulary extraction for affected episodes
+- [x] Built `SeparableVerbRecombiner` in `src/processing/vocabulary.py`
+      — Strategy 1: spaCy dep parsing (svp / compound:prt labels)
+      — Strategy 2: end-of-clause heuristic (particle at sentence end + verb earlier)
+      — Both validate combined form against dictionary DB to avoid false positives
+- [x] Integrated into `VocabularyExtractor` — enabled when dictionary is loaded
+- [x] Updated `scripts/extract_vocabulary.py` to pass dictionary lookup to extractor
+- [ ] **Run:** `python scripts/extract_vocabulary.py --all` to re-extract with separable verbs
+- [ ] **Then:** `python scripts/enrich_vocab_llm.py --all` to fill new words' translations
 
 ### Phase 5B: Video-Transcript UX
-- [ ] **Timestamp seeks embedded video** — use YouTube iframe API `postMessage`
-      to seek the embedded player instead of opening a new tab. Applies to both
-      Streamlit (iframe postMessage in JS) and Next.js (ref to iframe).
+- [x] **Timestamp seeks embedded video** ✅ — uses YouTube iframe API `postMessage`
+      to seek the embedded player instead of opening a new tab.
+      - Streamlit: transcript component reaches into parent document via
+        `window.parent.document.getElementById('yt-player')` to send postMessage
+        commands. Falls back to opening new tab if cross-origin blocked.
+      - Next.js: `EpisodeView` holds iframe ref, passes `seekTo` callback to
+        `Transcript` component. Timestamps are buttons, not links.
+      - Both: embed URL includes `enablejsapi=1` to enable the YouTube JS API.
 - [ ] **Transcript auto-scroll** (stretch) — track video currentTime via API polling,
       highlight and scroll to the matching subtitle segment. Higher effort.
 

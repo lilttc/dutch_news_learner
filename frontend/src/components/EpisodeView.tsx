@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import type { EpisodeDetail } from "@/lib/api";
 import { Transcript } from "./Transcript";
 import { VocabularyList } from "./VocabularyList";
@@ -21,6 +21,20 @@ function formatDate(iso: string | null): string {
 
 export function EpisodeView({ episode }: { episode: EpisodeDetail }) {
   const [activeTab, setActiveTab] = useState<Tab>("Transcript");
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const seekTo = useCallback((seconds: number) => {
+    const iframe = iframeRef.current;
+    if (!iframe?.contentWindow) return;
+    iframe.contentWindow.postMessage(
+      JSON.stringify({ event: "command", func: "seekTo", args: [seconds, true] }),
+      "*"
+    );
+    iframe.contentWindow.postMessage(
+      JSON.stringify({ event: "command", func: "playVideo", args: [] }),
+      "*"
+    );
+  }, []);
 
   return (
     <div>
@@ -31,11 +45,12 @@ export function EpisodeView({ episode }: { episode: EpisodeDetail }) {
         </p>
       )}
 
-      {/* Video embed */}
+      {/* Video embed — enablejsapi=1 allows postMessage seeking */}
       <div className="relative mb-6 overflow-hidden rounded-lg pb-[56.25%]">
         <iframe
+          ref={iframeRef}
           className="absolute inset-0 h-full w-full"
-          src={`https://www.youtube.com/embed/${episode.video_id}`}
+          src={`https://www.youtube.com/embed/${episode.video_id}?enablejsapi=1`}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
         />
@@ -71,6 +86,7 @@ export function EpisodeView({ episode }: { episode: EpisodeDetail }) {
           segments={episode.segments}
           videoId={episode.video_id}
           vocabulary={episode.vocabulary}
+          onSeek={seekTo}
         />
       )}
       {activeTab === "Vocabulary" && (

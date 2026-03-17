@@ -128,10 +128,10 @@ def format_timestamp(seconds):
 
 
 def render_video(video_id):
-    """Embed YouTube video."""
+    """Embed YouTube video with JS API enabled for in-page seeking."""
     st.markdown(
-        f'<iframe width="100%" height="400" '
-        f'src="https://www.youtube.com/embed/{video_id}" '
+        f'<iframe id="yt-player" width="100%" height="400" '
+        f'src="https://www.youtube.com/embed/{video_id}?enablejsapi=1" '
         f'frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" '
         f'allowfullscreen></iframe>',
         unsafe_allow_html=True,
@@ -240,6 +240,7 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
         lines.append({
             "ts": ts,
             "yt_url": yt_url,
+            "start_time": seg.start_time,
             "text": text,
             "translation_en": (getattr(seg, "translation_en", None) or "") if show_translation else "",
         })
@@ -264,7 +265,8 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
 .bubble-links a {{ color:#1f77b4; margin-right:8px; }}
 .transcript-line {{ margin-bottom:14px; }}
 .transcript-ts {{ font-weight:bold; }}
-.transcript-ts a {{ color:inherit; }}
+.transcript-ts a {{ color:inherit; cursor:pointer; }}
+.transcript-ts a:hover {{ text-decoration:underline; }}
 .transcript-en {{ color:#555; font-size:0.9em; margin-top:2px; margin-left:0; }}
 .bubble-overlay {{ position:fixed; inset:0; z-index:9998; }}
 </style>
@@ -335,7 +337,38 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
   document.getElementById('bubble-close').onclick = hideBubble;
   overlay.onclick = hideBubble;
 
+  // Seek the YouTube player embedded in the parent Streamlit page.
+  // st.components.v1.html() iframes have allow-same-origin, so we can
+  // access window.parent.document to find the YouTube iframe by ID,
+  // then use YouTube's postMessage protocol to seek + play.
+  function seekVideo(seconds) {{
+    try {{
+      var ytFrame = window.parent.document.getElementById('yt-player');
+      if (ytFrame && ytFrame.contentWindow) {{
+        ytFrame.contentWindow.postMessage(JSON.stringify({{
+          event: 'command', func: 'seekTo', args: [seconds, true]
+        }}), '*');
+        ytFrame.contentWindow.postMessage(JSON.stringify({{
+          event: 'command', func: 'playVideo', args: []
+        }}), '*');
+        return true;
+      }}
+    }} catch(e) {{}}
+    return false;
+  }}
+
   root.addEventListener('click', function(ev) {{
+    // Handle timestamp clicks — seek embedded video
+    var tsLink = ev.target.closest('.ts-link');
+    if (tsLink) {{
+      ev.preventDefault();
+      var time = parseFloat(tsLink.getAttribute('data-time'));
+      if (!seekVideo(time)) {{
+        window.open(tsLink.getAttribute('data-url'), '_blank');
+      }}
+      return;
+    }}
+    // Handle vocab word clicks — show definition bubble
     var w = ev.target.closest('.vocab-word');
     if (w) {{
       ev.preventDefault();
@@ -349,7 +382,7 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
   lines.forEach(function(line) {{
     var div = document.createElement('div');
     div.className = 'transcript-line';
-    var html = '<span class="transcript-ts"><a href="' + line.yt_url + '" target="_blank" rel="noopener">' + line.ts + '</a></span> ' + line.text;
+    var html = '<span class="transcript-ts"><a href="#" class="ts-link" data-time="' + line.start_time + '" data-url="' + line.yt_url + '">' + line.ts + '</a></span> ' + line.text;
     if (line.translation_en) {{
       html += '<div class="transcript-en">' + line.translation_en + '</div>';
     }}

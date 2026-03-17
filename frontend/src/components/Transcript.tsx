@@ -7,6 +7,7 @@ interface Props {
   segments: Segment[];
   videoId: string;
   vocabulary: VocabWord[];
+  onSeek?: (seconds: number) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -15,7 +16,7 @@ function formatTime(seconds: number): string {
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
-export function Transcript({ segments, videoId, vocabulary }: Props) {
+export function Transcript({ segments, videoId, vocabulary, onSeek }: Props) {
   const [showTranslation, setShowTranslation] = useState(false);
   const [bubble, setBubble] = useState<{
     word: VocabWord;
@@ -101,14 +102,14 @@ export function Transcript({ segments, videoId, vocabulary }: Props) {
       <div className="space-y-3">
         {segments.map((seg) => (
           <div key={seg.id} className="leading-relaxed">
-            <a
-              href={`https://www.youtube.com/watch?v=${videoId}&t=${Math.floor(seg.start_time)}s`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mr-2 text-sm font-bold text-[var(--muted)] hover:text-[var(--foreground)]"
+            <button
+              type="button"
+              onClick={() => onSeek?.(seg.start_time)}
+              title={`Jump to ${formatTime(seg.start_time)}`}
+              className="mr-2 text-sm font-bold text-[var(--muted)] hover:text-[var(--foreground)] hover:underline"
             >
               {formatTime(seg.start_time)}
-            </a>
+            </button>
             <span>{renderText(seg.text)}</span>
             {showTranslation && seg.translation_en && (
               <p className="ml-14 text-sm text-[var(--muted)]">
