@@ -1,6 +1,6 @@
 # Dutch News Learner TODO
 
-**Last Updated:** 2026-03-17 (afternoon)
+**Last Updated:** 2026-03-19
 
 ---
 
@@ -85,25 +85,26 @@ Phase 6 (Postgres + proper hosting). Not urgent — Streamlit serves well for no
 
 ---
 
-## Pick Up Here (Mar 18)
+## Pick Up Here (Mar 19)
 
-### Phase 6A: Database Migration to Cloud Postgres (PRIORITY)
-Migrate from SQLite-in-git to a cloud Postgres database. This unblocks
-automated pipelines and eliminates the growing binary DB in git history.
+### Phase 6A: Database Migration to Cloud Postgres ✅ DONE
+Migrated from SQLite to Neon Postgres. Pipeline and Streamlit now use `DATABASE_URL`.
 
-- [ ] **Choose provider** — Azure Database for Postgres (free tier),
-      AWS RDS, Neon, or Supabase. Discuss Mar 18.
-- [ ] **Set up cloud Postgres** — create instance, configure access
-- [ ] **Update `get_engine()`** — read `DATABASE_URL` env var, keep SQLite fallback for local dev
-- [ ] **Adapt `_migrate_schema()`** — Postgres-compatible DDL (some SQLite syntax differs)
-- [ ] **Write migration script** — one-time copy: SQLite → Postgres (episodes, vocab, user data, quiz)
-- [ ] **Migrate dictionary** — either Postgres table or keep as local SQLite file (read-only, small)
-- [ ] **Update secrets** — Streamlit Cloud, Render/Vercel, `.env` for local dev
-- [ ] **Test end-to-end** — pipeline writes to Postgres, Streamlit reads from Postgres
-- [ ] **Remove `data/dutch_news.db` from git** — add to `.gitignore`
+- [x] **Choose provider** — Neon (free tier)
+- [x] **Set up cloud Postgres** — Neon instance, connection string in `.env`
+- [x] **Update `get_engine()`** — reads `DATABASE_URL`, SQLite fallback for local dev
+- [x] **Adapt `_migrate_schema()`** — `_pg_add_column` for conditional ALTER, Postgres-compatible DDL
+- [x] **Write migration script** — `scripts/migrate_to_postgres.py` (batch inserts, idempotent)
+- [x] **Dictionary** — kept as local SQLite (read-only, not migrated)
+- [x] **Update secrets** — Streamlit Cloud `DATABASE_URL`, `.env` for local
+- [x] **Test end-to-end** — pipeline writes to Postgres, Streamlit reads from Postgres
+- [x] **Remove `data/dutch_news.db` from git** — gitignored
+- [x] **Lock contention fix** — conditional migrations, `check_locks.py`, `kill_stuck_connections.py`
+- [x] **Incremental pipeline** — each step only processes episodes needing it (default)
 
 ### Phase 6B: GitHub Actions Pipeline Automation
 Once DB is on Postgres, the pipeline can run in CI without committing data back to git.
+See `docs/GITHUB_ACTIONS_SETUP.md` for step-by-step guide.
 
 - [ ] **Create `.github/workflows/daily_pipeline.yml`**
       — install Python, deps, spaCy model (cached)
@@ -223,18 +224,14 @@ streamlit run app/main.py
 
 ### Daily Pipeline
 ```bash
-# Full pipeline (one command) — writes to DATABASE_URL if set, else local SQLite
+# Full pipeline (incremental: only new/missing data)
 bash scripts/run_pipeline.sh
 
-# With limits
+# Re-process all or limit
+bash scripts/run_pipeline.sh --all
 bash scripts/run_pipeline.sh --max 3
 
-# If still using SQLite: push updated DB for deployments
-git add data/dutch_news.db
-git commit -m "Update DB with new episodes"
-git push origin main
-
-# Once on Postgres + GitHub Actions: pipeline runs automatically, no manual steps
+# Writes to DATABASE_URL (Neon). No git commit of DB — pipeline runs locally or via GitHub Actions.
 ```
 
 ### Dictionary
@@ -347,3 +344,20 @@ python scripts/convert_dictionary_to_sqlite.py
   - Phase 6B (GitHub Actions pipeline) follows immediately after
   - Quiz improvements continue on branch, merge when ready
   - Considering AWS/Azure for Postgres (CV value: Azure, dbt potential)
+
+### Mar 18–19, 2026
+- **Phase 6A: Postgres migration** (Neon)
+  - `get_engine()` reads `DATABASE_URL`, SQLite fallback
+  - `_pg_add_column()` for conditional ALTER (avoids lock contention)
+  - `migrate_to_postgres.py` — batch inserts, idempotent
+  - Streamlit Cloud: removed /tmp copy hack, uses DATABASE_URL
+  - Switched to channel uploads playlist (UUch2JvY2ZSwcjf5gb93HGQw)
+- **Lock contention fix:** Multiple processes running old ALTER TABLE caused deadlocks.
+  - Conditional migrations via information_schema check
+  - Pool-level lock_timeout reset on connect
+  - `check_locks.py`, `kill_stuck_connections.py` for diagnostics
+- **Incremental pipeline:** Each step defaults to "only process what's missing"
+  - extract_vocabulary: episodes with no episode_vocabulary
+  - translate_segments: episodes with untranslated segments
+  - extract_topics: episodes missing topics
+  - fetch_related_articles: already incremental

@@ -14,7 +14,7 @@ This document describes the system architecture, data flow, and design decisions
 │   ┌──────────────┐     ┌──────────────┐     ┌──────────────────────────┐   │
 │   │   INGESTION  │────▶│  PROCESSING  │────▶│       STORAGE             │   │
 │   │              │     │              │     │                          │   │
-│   │ YouTube API  │     │ Tokenization │     │  SQLite / PostgreSQL     │   │
+│   │ YouTube API  │     │ Tokenization │     │  PostgreSQL (Neon)       │   │
 │   │ Transcripts  │     │ Lemmatization│     │  Episodes, Vocabulary,   │   │
 │   │              │     │ Frequency    │     │  User Progress, Quizzes   │   │
 │   └──────────────┘     └──────────────┘     └────────────┬─────────────┘   │
@@ -384,16 +384,18 @@ app/
 
 ## 7. Deployment Considerations
 
-### 7.1 Personal Version
+### 7.1 Current Deployment
 
 - **Single user** — No auth required
-- **SQLite** — File-based, no server
+- **PostgreSQL (Neon)** — Cloud database, shared by Streamlit, pipeline, API
+- **SQLite fallback** — Local dev when `DATABASE_URL` not set
+- **Dictionary** — Local SQLite file (read-only, not migrated)
 - **Local run** — `streamlit run app/main.py`
-- **Cron** — Daily ingestion script (e.g., 6am)
+- **Pipeline** — `run_pipeline.sh` (incremental by default); GitHub Actions planned
 
 ### 7.2 Public Platform (Future)
 
-- **PostgreSQL** — Multi-user, concurrent access
+- **PostgreSQL** — Already in use (Neon)
 - **Authentication** — Auth0, Supabase, or similar
 - **Background jobs** — Celery, Dramatiq, or cloud scheduler
 - **Hosting** — Render, Railway, or VPS

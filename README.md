@@ -126,7 +126,7 @@ To keep the project focused, v1 intentionally avoids:
 | Layer | Technology |
 |-------|------------|
 | Backend | Python 3.11+, FastAPI |
-| Database | SQLite (data) + SQLite (dictionary) |
+| Database | PostgreSQL (Neon) + SQLite (dictionary) |
 | NLP | spaCy (nl_core_news_md), separable verb recombination |
 | Dictionary | Wiktionary NL + EN editions (POS-aware, SQLite) |
 | LLM | OpenAI GPT-4o-mini (translation, topic extraction, vocab enrichment) |
@@ -183,6 +183,9 @@ dutch_news_learner/
 │   ├── download_dictionary.py          # NL Wiktionary download
 │   ├── download_dictionary_en.py       # EN Wiktionary Dutch entries
 │   ├── convert_dictionary_to_sqlite.py # JSON → SQLite dictionary conversion
+│   ├── migrate_to_postgres.py          # One-time SQLite → Postgres migration
+│   ├── check_locks.py                  # Postgres lock diagnostics (manual)
+│   ├── kill_stuck_connections.py      # Terminate stuck backends (manual)
 │   └── query_db.py                     # Database inspection utility
 │
 ├── app/                                # Streamlit frontend (primary)
@@ -193,7 +196,7 @@ dutch_news_learner/
 │   └── src/components/                 # EpisodeView, Transcript, VocabularyList
 │
 ├── data/                               # Local data (gitignored)
-│   ├── dutch_news.db                   # Main database
+│   ├── dutch_news.db                   # SQLite fallback (local dev)
 │   └── dictionary/dutch_glosses.db     # Wiktionary dictionary (SQLite)
 │
 └── tests/
@@ -218,7 +221,7 @@ python -m spacy download nl_core_news_md
 
 # 2. Configure environment
 cp .env.example .env
-# Edit .env: YOUTUBE_API_KEY=your_key, OPENAI_API_KEY=your_key (optional)
+# Edit .env: DATABASE_URL (Neon Postgres), YOUTUBE_API_KEY, OPENAI_API_KEY (optional)
 
 # 3. Download dictionary (one-time, ~118MB)
 python scripts/download_dictionary.py
@@ -229,15 +232,15 @@ python scripts/convert_dictionary_to_sqlite.py
 python scripts/ingest_playlist.py --init-db --max-videos 5
 
 # 5. Extract vocabulary (with separable verb detection)
-python scripts/extract_vocabulary.py --max 5
+python scripts/extract_vocabulary.py   # Incremental: only episodes missing vocabulary
 
 # 6. Enrich translations (dictionary first, then LLM for gaps)
 python scripts/enrich_vocabulary.py
 python scripts/enrich_vocab_llm.py --all   # Requires OPENAI_API_KEY
 
 # 7. (Optional) Segment translation & topic extraction
-python scripts/translate_segments.py --max 5
-python scripts/extract_topics.py --max 5
+python scripts/translate_segments.py
+python scripts/extract_topics.py
 
 # 8. Start the learning app
 streamlit run app/main.py
@@ -250,15 +253,18 @@ cd frontend && npm run dev
 ### Daily Pipeline
 
 ```bash
-# Process new episodes (one command)
+# Process new episodes (incremental: only what's missing)
 bash scripts/run_pipeline.sh
 
-# Schedule daily at 20:00
-crontab -e
+# Re-process all or limit scope
+bash scripts/run_pipeline.sh --all      # Re-process everything
+bash scripts/run_pipeline.sh --max 5   # Limit to 5 newest per step
+
+# Local cron (alternative to GitHub Actions)
 # 0 20 * * * cd /path/to/dutch_news_learner && bash scripts/run_pipeline.sh >> logs/pipeline.log 2>&1
 ```
 
-**Default playlist:** [Drie onderwerpen in makkelijke taal](https://www.youtube.com/playlist?list=PLO72qiQ-gJuFzpCgQcsdd4lkulqeeBMC3) — Dutch news in easy language.
+**Source:** NOS Journaal in Makkelijke Taal channel uploads — Dutch news in easy language.
 
 ---
 
@@ -274,7 +280,9 @@ crontab -e
 | **5A** | Vocabulary quality (LLM enrichment, separable verb detection) | ✅ Done |
 | **5B** | Video-transcript UX (in-page timestamp seeking) | ✅ Done |
 | **5C** | Quiz system (translation multiple choice, spaced repetition) | Up next |
-| **6** | PostgreSQL + proper hosting + user auth | Planned |
+| **6A** | PostgreSQL (Neon) + cloud migration | ✅ Done |
+| **6B** | GitHub Actions daily pipeline | Planned |
+| **6C** | User auth + proper hosting | Planned |
 | **7** | AI features (RAG search, AI explanations) | Future |
 
 ---
