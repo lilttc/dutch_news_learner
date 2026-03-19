@@ -56,12 +56,13 @@ jobs:
 
 ## Smart Scheduling (Episode Check)
 
-The workflow runs every 10 min from 15:00–20:00 UTC. The check script enforces 6pm–8pm Amsterdam time (handles CEST/CET automatically). Before running the pipeline, it checks:
+The workflow runs every 10 min from 15:00–20:00 UTC (6pm–8pm Amsterdam). Whenever triggered (push, schedule, or manual), it checks:
 
-- **Weekdays:** Is today's episode already in the DB?
-- **Weekends:** Is Friday's episode already in the DB?
+- **Playlist vs DB:** Fetches the latest 100 videos from the YouTube playlist and compares against episodes in the DB (with `transcript_fetched`).
+- If any playlist video is missing or not fully ingested → run pipeline.
+- If all are present → skip pipeline.
 
-If yes → skip pipeline (fast exit). If no → run full pipeline. This avoids redundant runs once the day's episode is ingested.
+No time window or date filter — the check runs whenever the workflow runs. Manual trigger supports a "Force run" option to bypass the check.
 
 ---
 
@@ -73,9 +74,7 @@ In **Settings → Secrets and variables → Actions**:
 |--------|----------|---------|
 | `DATABASE_URL` | Yes | All steps (Neon Postgres) |
 | `OPENAI_API_KEY` | Yes | enrich_vocab_llm, translate_segments, extract_topics |
-| `YOUTUBE_API_KEY` | If using API | ingest_playlist (playlist metadata) |
-
-`youtube-transcript-api` does not need a key; playlist fetch may use it.
+| `YOUTUBE_API_KEY` | Yes | check_episode_needed, ingest_playlist (playlist fetch) |
 
 ---
 
