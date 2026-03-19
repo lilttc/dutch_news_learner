@@ -1,6 +1,8 @@
 name: Daily Pipeline
 
 on:
+  push:
+    branches: [feature/github-actions-pipeline]
   schedule:
     # Weekdays: every 15 min from 18:00–20:00 UTC (NOS uploads ~18:00, sometimes late)
     - cron: '*/15 18-20 * * 1-5'
