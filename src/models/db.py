@@ -208,7 +208,7 @@ def _resolve_url(db_url: str | None = None) -> str:
 
 
 def _is_postgres(url: str) -> bool:
-    return url.startswith("postgresql")
+    return url.startswith("postgresql") or url.startswith("postgres://")
 
 
 def get_engine(db_url: str | None = None):
@@ -228,6 +228,7 @@ def get_engine(db_url: str | None = None):
             echo=False,
             pool_size=5,
             max_overflow=10,
+            pool_pre_ping=True,  # Reconnect if Neon scaled to zero and closed idle connections
             connect_args={"sslmode": "require"},
         )
 
