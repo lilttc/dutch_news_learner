@@ -38,7 +38,7 @@ jobs:
             echo "run_pipeline=true" >> $GITHUB_OUTPUT
             echo "🔧 Force run: bypassing check"
           else
-            pip install sqlalchemy psycopg2-binary python-dotenv google-api-python-client --quiet
+            pip install sqlalchemy psycopg2-binary python-dotenv google-api-python-client youtube-transcript-api --quiet
             RESULT=$(python scripts/check_episode_needed.py)
             echo "run_pipeline=$RESULT" >> $GITHUB_OUTPUT
             if [ "$RESULT" = "false" ]; then
