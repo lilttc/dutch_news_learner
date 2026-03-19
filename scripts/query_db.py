@@ -15,9 +15,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from dotenv import load_dotenv
 load_dotenv()
 
+from sqlalchemy import func, or_
+
 from src.models import (
     Episode,
     EpisodeVocabulary,
+    SubtitleSegment,
     VocabularyItem,
     get_engine,
     get_session,
@@ -69,6 +72,49 @@ def show_vocabulary(session, limit=20, episode_id=None):
     print()
 
 
+def show_translation_status(session):
+    """Show how many episodes need translation (have segments without translation_en)."""
+    # Episodes with transcripts
+    total_with_transcript = (
+        session.query(Episode).filter(Episode.transcript_fetched == True).count()
+    )
+
+    # Episodes with at least one segment missing translation
+    needs_translation = (
+        session.query(SubtitleSegment.episode_id)
+        .filter(
+            or_(
+                SubtitleSegment.translation_en.is_(None),
+                SubtitleSegment.translation_en == "",
+            )
+        )
+        .distinct()
+    )
+    episode_ids_needing = {r[0] for r in needs_translation}
+
+    # Segments: total vs translated
+    total_segments = session.query(SubtitleSegment).count()
+    translated_segments = (
+        session.query(SubtitleSegment)
+        .filter(
+            SubtitleSegment.translation_en.isnot(None),
+            SubtitleSegment.translation_en != "",
+        )
+        .count()
+    )
+
+    print("\n📝 TRANSLATION STATUS")
+    print("-" * 70)
+    print(f"  Episodes with transcripts:     {total_with_transcript}")
+    print(f"  Episodes needing translation: {len(episode_ids_needing)}")
+    print(f"  Episodes fully translated:     {total_with_transcript - len(episode_ids_needing)}")
+    print()
+    print(f"  Total segments:                {total_segments}")
+    print(f"  Segments translated:           {translated_segments}")
+    print(f"  Segments missing translation:  {total_segments - translated_segments}")
+    print()
+
+
 def show_recurring(session, min_episodes=2, limit=20):
     """Show words that appear in multiple episodes (recurring vocabulary)."""
     from sqlalchemy import func
@@ -94,6 +140,7 @@ def main():
     parser.add_argument("--episodes", action="store_true", help="List episodes")
     parser.add_argument("--vocab", action="store_true", help="List vocabulary")
     parser.add_argument("--recurring", action="store_true", help="Show recurring words")
+    parser.add_argument("--translation-status", action="store_true", help="Show translation status (episodes/segments needing translation)")
     parser.add_argument("--episode-id", type=int, help="Filter vocabulary by episode ID")
     parser.add_argument("--top", type=int, default=20, help="Limit rows (default: 20)")
     parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var, then SQLite fallback)")
@@ -104,11 +151,13 @@ def main():
     session = get_session(engine)
 
     # Default: show all
-    if not any([args.episodes, args.vocab, args.recurring]):
+    if not any([args.episodes, args.vocab, args.recurring, args.translation_status]):
         show_episodes(session, limit=args.top)
         show_recurring(session, limit=args.top)
         show_vocabulary(session, limit=args.top, episode_id=args.episode_id)
     else:
+        if args.translation_status:
+            show_translation_status(session)
         if args.episodes:
             show_episodes(session, limit=args.top)
         if args.recurring:

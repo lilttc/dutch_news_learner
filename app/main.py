@@ -47,16 +47,18 @@ EXCLUDE_LEMMAS = {"journaal"}
 
 
 @st.cache_resource(ttl=3600)
-def get_db_session():
-    """Create database session. Cached for 1 hour, then refreshed.
-
-    Uses DATABASE_URL (Postgres) when set, otherwise falls back to local SQLite.
-    """
+def get_db_engine():
+    """Create database engine. Cached for 1 hour. Use get_db_session() for a per-request session."""
     from src.models import _migrate_schema
 
     engine = get_engine()
     _migrate_schema(engine)
-    return get_session(engine)
+    return engine
+
+
+def get_db_session():
+    """Create a fresh session for this request. Close it when done to return connections to the pool."""
+    return get_session(get_db_engine())
 
 
 def load_episodes(session):
@@ -712,75 +714,78 @@ def _render_tab_related_reading(episode):
 
 def main():
     session = get_db_session()
-    episodes = load_episodes(session)
+    try:
+        episodes = load_episodes(session)
 
-    if not episodes:
-        st.error("No episodes found. Run `python scripts/ingest_playlist.py` first.")
-        st.stop()
+        if not episodes:
+            st.error("No episodes found. Run `python scripts/ingest_playlist.py` first.")
+            st.stop()
 
-    # Sync episode selection with query params (for shareable links)
-    query_episode = st.query_params.get("episode")
+        # Sync episode selection with query params (for shareable links)
+        query_episode = st.query_params.get("episode")
 
-    episode_options = {
-        f"{ep.id} | {ep.published_at.strftime('%Y-%m-%d') if ep.published_at else '?'} — {ep.title[:45]}": ep.id
-        for ep in episodes
-    }
-    default_index = 0
-    if query_episode:
-        try:
-            qe = int(query_episode)
-            for i, (_, eid) in enumerate(episode_options.items()):
-                if eid == qe:
-                    default_index = i
-                    break
-        except ValueError:
-            pass
+        episode_options = {
+            f"{ep.published_at.strftime('%Y-%m-%d') if ep.published_at else '?'} — {ep.title[:45]}": ep.id
+            for ep in episodes
+        }
+        default_index = 0
+        if query_episode:
+            try:
+                qe = int(query_episode)
+                for i, (_, eid) in enumerate(episode_options.items()):
+                    if eid == qe:
+                        default_index = i
+                        break
+            except ValueError:
+                pass
 
-    # --- Sidebar ---
-    st.sidebar.title("🇳🇱 Dutch News Learner")
-    st.sidebar.markdown("---")
-    selected_label = st.sidebar.selectbox(
-        "Choose episode",
-        options=list(episode_options.keys()),
-        index=default_index,
-        key="episode_select",
-    )
-    selected_id = episode_options[selected_label]
-    st.sidebar.markdown("---")
-    st.sidebar.caption("Drie onderwerpen in makkelijke taal")
-    st.sidebar.markdown("[☕ Buy me a coffee](https://buymeacoffee.com/lilttc)")
+        # --- Sidebar ---
+        st.sidebar.title("🇳🇱 Dutch News Learner")
+        st.sidebar.markdown("---")
+        selected_label = st.sidebar.selectbox(
+            "Choose episode",
+            options=list(episode_options.keys()),
+            index=default_index,
+            key="episode_select",
+        )
+        selected_id = episode_options[selected_label]
+        st.sidebar.markdown("---")
+        st.sidebar.caption("Drie onderwerpen in makkelijke taal")
+        st.sidebar.markdown("[☕ Buy me a coffee](https://buymeacoffee.com/lilttc)")
 
-    # --- Load episode data ---
-    episode = load_episode_with_data(session, selected_id)
-    if not episode:
-        st.error("Episode not found.")
-        st.stop()
+        # --- Load episode data ---
+        episode = load_episode_with_data(session, selected_id)
+        if not episode:
+            st.error("Episode not found.")
+            st.stop()
 
-    vocab_list = _filter_vocab(episode.episode_vocabulary or [])
+        vocab_list = _filter_vocab(episode.episode_vocabulary or [])
 
-    # --- Header: title + date ---
-    st.title(episode.title)
-    if episode.published_at:
-        st.caption(episode.published_at.strftime("%A, %B %d, %Y"))
+        # --- Header: title + date ---
+        st.title(episode.title)
+        if episode.published_at:
+            st.caption(episode.published_at.strftime("%A, %B %d, %Y"))
 
-    # --- Video (always visible) ---
-    render_video(episode.video_id)
+        # --- Video (always visible) ---
+        render_video(episode.video_id)
 
-    # --- Tabbed content below the video ---
-    tab_transcript, tab_vocabulary, tab_reading = st.tabs([
-        "📝 Transcript",
-        f"📚 Vocabulary ({len(vocab_list)})",
-        "📰 Related Reading",
-    ])
+        # --- Tabbed content below the video ---
+        tab_transcript, tab_vocabulary, tab_reading = st.tabs([
+            "📝 Transcript",
+            f"📚 Vocabulary ({len(vocab_list)})",
+            "📰 Related Reading",
+        ])
 
-    with tab_transcript:
-        _render_tab_transcript(episode, vocab_list)
+        with tab_transcript:
+            _render_tab_transcript(episode, vocab_list)
 
-    with tab_vocabulary:
-        _render_tab_vocabulary(vocab_list, session)
+        with tab_vocabulary:
+            _render_tab_vocabulary(vocab_list, session)
 
-    with tab_reading:
-        _render_tab_related_reading(episode)
+        with tab_reading:
+            _render_tab_related_reading(episode)
+    finally:
+        session.close()
 
 
 if __name__ == "__main__":

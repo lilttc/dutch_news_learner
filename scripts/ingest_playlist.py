@@ -76,25 +76,35 @@ def ingest_playlist(
         videos = videos[:max_videos]
         print(f"📊 Processing {len(videos)} videos (limit: {max_videos})")
 
+    # Filter out videos already in DB (one query instead of N)
+    if skip_existing:
+        video_ids = [v["video_id"] for v in videos]
+        existing_ids = {
+            r[0]
+            for r in session.query(Episode.video_id)
+            .filter(Episode.video_id.in_(video_ids))
+            .all()
+        }
+        videos_to_process = [v for v in videos if v["video_id"] not in existing_ids]
+        skipped_count = len(videos) - len(videos_to_process)
+        print(f"⏭️  Skipping {skipped_count} already in database")
+    else:
+        videos_to_process = videos
+        skipped_count = 0
+
     print()
 
     success_count = 0
-    skipped_count = 0
     failed_count = 0
 
-    for idx, video_data in enumerate(videos, 1):
+    for idx, video_data in enumerate(videos_to_process, 1):
         video_id = video_data["video_id"]
         title = video_data["title"]
 
-        print(f"[{idx}/{len(videos)}] {title[:60]}...")
+        print(f"[{idx}/{len(videos_to_process)}] {title[:60]}...")
         print(f"  Video ID: {video_id}")
 
         existing = session.query(Episode).filter_by(video_id=video_id).first()
-        if existing and skip_existing:
-            print("  ⏭️  SKIPPED: Already in database")
-            skipped_count += 1
-            print()
-            continue
 
         try:
             transcript_result = transcript_fetcher.fetch_transcript(

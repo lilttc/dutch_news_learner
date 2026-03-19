@@ -1,0 +1,63 @@
+name: Daily Pipeline
+
+on:
+  push:
+    branches: [feature/github-actions-pipeline]
+  schedule:
+    # 15:00–20:00 UTC = 6pm–8pm Amsterdam (CEST) — when new episodes typically air
+    # check_episode_needed.py compares playlist vs DB; runs whenever triggered
+    - cron: '*/10 15-20 * * 1-5'
+    - cron: '*/10 15-20 * * 0,6'
+  workflow_dispatch:
+    inputs:
+      force_run:
+        description: 'Force run pipeline (bypass time/episode check)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Check if pipeline needed
+        id: check
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.force_run }}" = "true" ]; then
+            echo "run_pipeline=true" >> $GITHUB_OUTPUT
+            echo "🔧 Force run: bypassing check"
+          else
+            pip install sqlalchemy psycopg2-binary python-dotenv google-api-python-client youtube-transcript-api --quiet
+            RESULT=$(python scripts/check_episode_needed.py)
+            echo "run_pipeline=$RESULT" >> $GITHUB_OUTPUT
+            if [ "$RESULT" = "false" ]; then
+              echo "✅ All playlist episodes in DB. Skipping pipeline."
+            else
+              echo "📥 Episodes missing from DB. Running pipeline..."
+            fi
+          fi
+
+      - name: Install dependencies
+        if: steps.check.outputs.run_pipeline == 'true'
+        run: |
+          pip install -r requirements.txt
+          python -m spacy download nl_core_news_md
+
+      - name: Run pipeline
+        if: steps.check.outputs.run_pipeline == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: bash scripts/run_pipeline.sh

@@ -39,27 +39,28 @@ log "Step 3/7: Enriching vocabulary (dictionary)..."
 python scripts/enrich_vocabulary.py
 
 # Step 4: Enrich vocabulary with LLM (fills gaps the dictionary missed)
-if grep -q "OPENAI_API_KEY" .env 2>/dev/null; then
+# Check env var (CI) or .env file (local)
+if [ -n "${OPENAI_API_KEY:-}" ] || grep -q "OPENAI_API_KEY" .env 2>/dev/null; then
     log "Step 4/7: Enriching vocabulary (LLM)..."
     python scripts/enrich_vocab_llm.py --all
 else
-    log "Step 4/7: Skipping LLM enrichment (OPENAI_API_KEY not in .env)"
+    log "Step 4/7: Skipping LLM enrichment (OPENAI_API_KEY not set)"
 fi
 
 # Step 5: Translate segments (OpenAI — skipped if no API key)
-if grep -q "OPENAI_API_KEY" .env 2>/dev/null; then
+if [ -n "${OPENAI_API_KEY:-}" ] || grep -q "OPENAI_API_KEY" .env 2>/dev/null; then
     log "Step 5/7: Translating segments..."
     python scripts/translate_segments.py "${EXTRA_ARGS[@]}"
 else
-    log "Step 5/7: Skipping translation (OPENAI_API_KEY not in .env)"
+    log "Step 5/7: Skipping translation (OPENAI_API_KEY not set)"
 fi
 
 # Step 6: Extract topics (OpenAI — skipped if no API key)
-if grep -q "OPENAI_API_KEY" .env 2>/dev/null; then
+if [ -n "${OPENAI_API_KEY:-}" ] || grep -q "OPENAI_API_KEY" .env 2>/dev/null; then
     log "Step 6/7: Extracting topics..."
     python scripts/extract_topics.py "${EXTRA_ARGS[@]}"
 else
-    log "Step 6/7: Skipping topic extraction (OPENAI_API_KEY not in .env)"
+    log "Step 6/7: Skipping topic extraction (OPENAI_API_KEY not set)"
 fi
 
 # Step 7: Fetch related NOS articles (DuckDuckGo — no API key needed)
