@@ -16,14 +16,56 @@ function formatTime(seconds: number): string {
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
+interface MergedSentence {
+  start_time: number;
+  text: string;
+  translation_en: string;
+}
+
+function mergeIntoSentences(segs: Segment[]): MergedSentence[] {
+  const sorted = [...segs].sort((a, b) => a.start_time - b.start_time);
+  const result: MergedSentence[] = [];
+  let texts: string[] = [];
+  let translations: string[] = [];
+  let startTime = 0;
+
+  for (const seg of sorted) {
+    const text = seg.text.trim();
+    if (!text) continue;
+    if (texts.length === 0) startTime = seg.start_time;
+    texts.push(text);
+    if (seg.translation_en) translations.push(seg.translation_en);
+
+    if (/[.!?]$/.test(text)) {
+      result.push({
+        start_time: startTime,
+        text: texts.join(" "),
+        translation_en: translations.join(" "),
+      });
+      texts = [];
+      translations = [];
+    }
+  }
+  if (texts.length > 0) {
+    result.push({
+      start_time: startTime,
+      text: texts.join(" "),
+      translation_en: translations.join(" "),
+    });
+  }
+  return result;
+}
+
 export function Transcript({ segments, videoId, vocabulary, onSeek }: Props) {
   const [showTranslation, setShowTranslation] = useState(false);
   const [bubble, setBubble] = useState<{
     word: VocabWord;
+    clickedForm: string;
     x: number;
     y: number;
   } | null>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
+  const sentences = mergeIntoSentences(segments);
 
   // Build word -> VocabWord lookup
   const wordMap = new Map<string, VocabWord>();
@@ -45,6 +87,7 @@ export function Transcript({ segments, videoId, vocabulary, onSeek }: Props) {
       const spaceBelow = window.innerHeight - rect.bottom;
       setBubble({
         word: vocab,
+        clickedForm: word,
         x: Math.min(rect.left, window.innerWidth - 380),
         y: spaceBelow > 300 ? rect.bottom + 8 : rect.top - 300,
       });
@@ -100,20 +143,20 @@ export function Transcript({ segments, videoId, vocabulary, onSeek }: Props) {
       </p>
 
       <div className="space-y-3">
-        {segments.map((seg) => (
-          <div key={seg.id} className="leading-relaxed">
+        {sentences.map((sent, i) => (
+          <div key={i} className="leading-relaxed">
             <button
               type="button"
-              onClick={() => onSeek?.(seg.start_time)}
-              title={`Jump to ${formatTime(seg.start_time)}`}
+              onClick={() => onSeek?.(sent.start_time)}
+              title={`Jump to ${formatTime(sent.start_time)}`}
               className="mr-2 text-sm font-bold text-[var(--muted)] hover:text-[var(--foreground)] hover:underline"
             >
-              {formatTime(seg.start_time)}
+              {formatTime(sent.start_time)}
             </button>
-            <span>{renderText(seg.text)}</span>
-            {showTranslation && seg.translation_en && (
+            <span>{renderText(sent.text)}</span>
+            {showTranslation && sent.translation_en && (
               <p className="ml-14 text-sm text-[var(--muted)]">
-                {seg.translation_en}
+                {sent.translation_en}
               </p>
             )}
           </div>
@@ -133,9 +176,15 @@ export function Transcript({ segments, videoId, vocabulary, onSeek }: Props) {
           >
             &times;
           </button>
-          <h3 className="mb-2 text-lg font-bold">{bubble.word.lemma}</h3>
+          <h3 className="mb-2 text-lg font-bold">{bubble.clickedForm}</h3>
           {bubble.word.pos && (
             <p className="text-xs text-[var(--muted)]">({bubble.word.pos})</p>
+          )}
+          {bubble.word.lemma.toLowerCase() !== bubble.clickedForm.toLowerCase() && (
+            <p className="mt-1 text-sm">
+              <strong>{bubble.word.pos === "VERB" ? "Infinitive" : "Base form"}:</strong>{" "}
+              {bubble.word.lemma}
+            </p>
           )}
           {bubble.word.meaning && (
             <p className="mt-2">

@@ -127,6 +127,57 @@ def format_timestamp(seconds):
     return f"{m:02d}:{s:02d}"
 
 
+_SENTENCE_ENDERS = re.compile(r'[.!?]$')
+
+
+def merge_segments_into_sentences(segments):
+    """
+    Merge consecutive subtitle segments into sentence-level groups.
+
+    Groups segments until one ends with sentence-ending punctuation (. ! ?).
+    Returns list of dicts: {start_time, text, translation_en, end_time}.
+    """
+    sorted_segs = sorted(segments, key=lambda s: s.start_time)
+    if not sorted_segs:
+        return []
+
+    merged = []
+    buf_texts = []
+    buf_translations = []
+    buf_start = None
+
+    for seg in sorted_segs:
+        text = seg.text.strip()
+        if not text:
+            continue
+        if buf_start is None:
+            buf_start = seg.start_time
+        buf_texts.append(text)
+        tr = getattr(seg, "translation_en", None) or ""
+        if tr:
+            buf_translations.append(tr)
+
+        if _SENTENCE_ENDERS.search(text):
+            merged.append({
+                "start_time": buf_start,
+                "text": " ".join(buf_texts),
+                "translation_en": " ".join(buf_translations),
+            })
+            buf_texts = []
+            buf_translations = []
+            buf_start = None
+
+    # Flush remaining buffer (subtitle didn't end with punctuation)
+    if buf_texts:
+        merged.append({
+            "start_time": buf_start,
+            "text": " ".join(buf_texts),
+            "translation_en": " ".join(buf_translations),
+        })
+
+    return merged
+
+
 def render_video(video_id):
     """Embed YouTube video with JS API enabled for in-page seeking."""
     st.markdown(
@@ -185,6 +236,7 @@ def build_vocab_bubble_data(episode_vocab_list):
         links = lookup.get_links(v.lemma)
         entry = {
             "pos": v.pos or "",
+            "lemma": v.lemma,
             "meaning": meaning,
             "meaning_en": gloss_en or "",
             "forms": forms,
@@ -218,14 +270,13 @@ def build_vocab_bubble_data(episode_vocab_list):
 
 def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_translation=True):
     """Generate HTML for transcript with click-to-show definition bubbles (no page reload)."""
-    sorted_segments = sorted(segments, key=lambda s: s.start_time)
+    merged = merge_segments_into_sentences(segments)
     lines = []
-    for seg in sorted_segments:
-        ts = format_timestamp(seg.start_time)
-        yt_url = f"https://www.youtube.com/watch?v={video_id}&t={int(seg.start_time)}s"
-        text = seg.text
+    for sent in merged:
+        ts = format_timestamp(sent["start_time"])
+        yt_url = f"https://www.youtube.com/watch?v={video_id}&t={int(sent['start_time'])}s"
+        text = sent["text"]
         if word_to_lemma:
-            # Replace vocab words with clickable spans
             def replace_word(match):
                 before, core, after = match.group(1), match.group(2), match.group(3)
                 core_lower = core.lower()
@@ -240,9 +291,9 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
         lines.append({
             "ts": ts,
             "yt_url": yt_url,
-            "start_time": seg.start_time,
+            "start_time": sent["start_time"],
             "text": text,
-            "translation_en": (getattr(seg, "translation_en", None) or "") if show_translation else "",
+            "translation_en": sent["translation_en"] if show_translation else "",
         })
 
     vocab_json = json.dumps(vocab_data).replace("</", "\\u003c/")  # Avoid breaking script tag
@@ -293,6 +344,9 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
     var html = '<div class="bubble-title">' + displayLemma + '</div>';
     entries.forEach(function(e, i) {{
       if (e.pos) html += '<div class="bubble-section"><strong>(' + e.pos + ')</strong></div>';
+      if (e.lemma && e.lemma.toLowerCase() !== displayLemma.toLowerCase()) {{
+        html += '<div class="bubble-section"><strong>' + (e.pos === 'VERB' ? 'Infinitive' : 'Base form') + ':</strong> ' + e.lemma + '</div>';
+      }}
       html += '<div class="bubble-section"><strong>Meaning:</strong> ' + (e.meaning || '') + '</div>';
       if (e.meaning_en) html += '<div class="bubble-section"><strong>English:</strong> ' + e.meaning_en + '</div>';
       if (e.forms && e.forms.length > 1) {{
@@ -401,17 +455,18 @@ def render_transcript_with_bubbles(segments, video_id, word_to_lemma=None, vocab
     """
     if not word_to_lemma or not vocab_data:
         # Fallback: plain transcript without bubbles
-        sorted_segments = sorted(segments, key=lambda s: s.start_time)
-        for seg in sorted_segments:
-            ts = format_timestamp(seg.start_time)
-            yt_url = f"https://www.youtube.com/watch?v={video_id}&t={int(seg.start_time)}s"
-            st.markdown(f"**[{ts}]({yt_url})** {seg.text}")
-            if show_translation and getattr(seg, "translation_en", None):
-                st.caption(seg.translation_en)
+        merged = merge_segments_into_sentences(segments)
+        for sent in merged:
+            ts = format_timestamp(sent["start_time"])
+            yt_url = f"https://www.youtube.com/watch?v={video_id}&t={int(sent['start_time'])}s"
+            st.markdown(f"**[{ts}]({yt_url})** {sent['text']}")
+            if show_translation and sent["translation_en"]:
+                st.caption(sent["translation_en"])
             st.markdown("")
         return
     html = _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_translation=show_translation)
-    estimated_height = 150 + len(segments) * 28
+    merged_count = len(merge_segments_into_sentences(segments))
+    estimated_height = 150 + merged_count * 40
     st.components.v1.html(html, height=min(800, estimated_height), scrolling=True)
 
 
