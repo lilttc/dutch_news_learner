@@ -4,10 +4,10 @@ on:
   push:
     branches: [feature/github-actions-pipeline]
   schedule:
-    # Weekdays 18:00–20:00 UTC: every 10 min (6pm–8pm). Run until today's episode is in DB.
-    - cron: '*/10 18-20 * * 1-5'
-    # Weekends: same window, check for Friday's episode
-    - cron: '*/10 18-20 * * 0,6'
+    # 15:00–20:00 UTC covers 6pm–8pm Amsterdam in both CEST (summer) and CET (winter)
+    # check_episode_needed.py enforces 6pm–8pm Amsterdam and skips outside that window
+    - cron: '*/10 15-20 * * 1-5'
+    - cron: '*/10 15-20 * * 0,6'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:

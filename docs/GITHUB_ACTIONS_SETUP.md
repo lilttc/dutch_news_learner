@@ -56,7 +56,7 @@ jobs:
 
 ## Smart Scheduling (Episode Check)
 
-The workflow runs every 10 min from 18:00–20:00 UTC (weekdays and weekends). Before running the pipeline, it checks:
+The workflow runs every 10 min from 15:00–20:00 UTC. The check script enforces 6pm–8pm Amsterdam time (handles CEST/CET automatically). Before running the pipeline, it checks:
 
 - **Weekdays:** Is today's episode already in the DB?
 - **Weekends:** Is Friday's episode already in the DB?
