@@ -4,10 +4,10 @@ on:
   push:
     branches: [feature/github-actions-pipeline]
   schedule:
-    # Weekdays: every 15 min from 18:00–20:00 UTC (NOS uploads ~18:00, sometimes late)
+    # Weekdays 18:00–20:00 UTC: every 15 min (6pm–8pm). Run until today's episode is in DB.
     - cron: '*/15 18-20 * * 1-5'
-    # Weekends: once at 18:15 UTC
-    - cron: '15 18 * * 0,6'
+    # Weekends: same window, check for Friday's episode
+    - cron: '*/15 18-20 * * 0,6'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
@@ -22,12 +22,28 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      - name: Check if pipeline needed
+        id: check
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          pip install sqlalchemy psycopg2-binary python-dotenv --quiet
+          RESULT=$(python scripts/check_episode_needed.py)
+          echo "run_pipeline=$RESULT" >> $GITHUB_OUTPUT
+          if [ "$RESULT" = "false" ]; then
+            echo "✅ Episode already in DB for target date. Skipping pipeline."
+          else
+            echo "📥 Episode not yet in DB. Running pipeline..."
+          fi
+
       - name: Install dependencies
+        if: steps.check.outputs.run_pipeline == 'true'
         run: |
           pip install -r requirements.txt
           python -m spacy download nl_core_news_md
 
       - name: Run pipeline
+        if: steps.check.outputs.run_pipeline == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

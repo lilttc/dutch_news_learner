@@ -114,6 +114,16 @@ Pipeline runs in CI via GitHub Actions. See `docs/GITHUB_ACTIONS_SETUP.md` for d
 - [ ] **Store secrets in GitHub** — `DATABASE_URL`, `YOUTUBE_API_KEY`, `OPENAI_API_KEY` (user action)
 - [ ] **Test** — trigger workflow manually, verify new episode in app (user action)
 
+### Phase 6D: VPN Integration for Transcript Fetch (Geo-Restriction)
+GitHub Actions runners are typically in the US; NOS transcripts may be geo-restricted.
+Integrate NordVPN in the workflow so ingest runs from a Netherlands IP.
+
+- [ ] **Add NordVPN step to workflow** — connect to NL server before ingest
+- [ ] **Store NordVPN credentials** — add `NORDVPN_SERVICE_USERNAME`, `NORDVPN_SERVICE_PASSWORD` as repo secrets (or use token-based auth if supported)
+- [ ] **Wrap ingest in VPN** — run only ingest + transcript fetch steps inside VPN; disconnect before remaining steps
+- [ ] **Test** — verify transcript fetch succeeds in CI
+- [ ] **Document** — update `docs/GITHUB_ACTIONS_SETUP.md` with VPN setup
+
 ### Phase 6C: Test Suite + CI
 Add tests and run them automatically on every push/PR. Catches regressions
 before they reach prod and demonstrates CI/CD skills.
