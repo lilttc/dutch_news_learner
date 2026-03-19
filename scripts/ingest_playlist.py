@@ -30,7 +30,7 @@ def ingest_playlist(
     source: str = PLAYLIST_SOURCE,
     max_videos: int = None,
     skip_existing: bool = True,
-    reverse: bool = False,
+    reverse: bool = True,
     db_path: str | None = None,
 ):
     """

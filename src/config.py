@@ -1,10 +1,11 @@
 """
 Configuration for Dutch News Learner.
 
-Playlist: Drie onderwerpen in makkelijke taal
-https://www.youtube.com/playlist?list=PLO72qiQ-gJuFzpCgQcsdd4lkulqeeBMC3
+Channel: NOS Journaal in Makkelijke Taal (@NOSJournaalinMakkelijkeTaal)
+Uses the channel's uploads playlist (auto-includes every upload, no delay).
+Old curated playlist: PLO72qiQ-gJuFzpCgQcsdd4lkulqeeBMC3
 """
 
-# Default playlist: Dutch news in easy language
-DEFAULT_PLAYLIST_ID = "PLO72qiQ-gJuFzpCgQcsdd4lkulqeeBMC3"
-PLAYLIST_SOURCE = "drie_onderwerpen"  # Identifier for this content source
+# Channel uploads playlist (derived from channel ID UCch2JvY2ZSwcjf5gb93HGQw)
+DEFAULT_PLAYLIST_ID = "UUch2JvY2ZSwcjf5gb93HGQw"
+PLAYLIST_SOURCE = "drie_onderwerpen"
