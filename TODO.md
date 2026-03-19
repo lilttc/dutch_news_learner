@@ -102,25 +102,17 @@ Migrated from SQLite to Neon Postgres. Pipeline and Streamlit now use `DATABASE_
 - [x] **Lock contention fix** — conditional migrations, `check_locks.py`, `kill_stuck_connections.py`
 - [x] **Incremental pipeline** — each step only processes episodes needing it (default)
 
-### Phase 6B: GitHub Actions Pipeline Automation
-Once DB is on Postgres, the pipeline can run in CI without committing data back to git.
-See `docs/GITHUB_ACTIONS_SETUP.md` for step-by-step guide.
+### Phase 6B: GitHub Actions Pipeline Automation ✅ DONE
+Pipeline runs in CI via GitHub Actions. See `docs/GITHUB_ACTIONS_SETUP.md` for details.
 
-- [ ] **Create `.github/workflows/daily_pipeline.yml`**
-      — install Python, deps, spaCy model (cached)
-      — run `scripts/run_pipeline.sh`
-      — writes directly to cloud Postgres (no git commit needed)
-- [ ] **Smart scheduling with retry window:**
-      — Weekdays: run every 15 min from 18:00–21:00 UTC (NOS uploads ~18:00,
-        sometimes late). Pipeline is idempotent — skips existing episodes, so
-        extra runs are harmless and finish fast if nothing new.
-      — Weekends: run once at 18:15 UTC (or skip if NOS doesn't upload weekends)
-      — Cron: `*/15 18-20 * * 1-5` (weekdays) + `15 18 * * 0,6` (weekends)
-- [ ] **Store secrets in GitHub** — `DATABASE_URL`, `YOUTUBE_API_KEY`, `OPENAI_API_KEY`
-- [ ] **Add error notifications** — GitHub sends email on failure by default
-- [ ] **Test** — trigger workflow manually (`workflow_dispatch`), verify new episode in app
-- [ ] **Update `run_pipeline.sh`** — support `DATABASE_URL` env var
-- [ ] **Remove cron instructions from README/TODO** — replaced by GitHub Actions
+- [x] **Create `.github/workflows/daily_pipeline.yml`**
+      — Python 3.11, pip cache, spaCy nl_core_news_md
+      — Schedule: weekdays */15 18-20 UTC, weekends 18:15 UTC
+      — Manual trigger: workflow_dispatch
+- [x] **Update `run_pipeline.sh`** — check OPENAI_API_KEY from env or .env (CI-friendly)
+- [x] **README/TODO** — note automatic pipeline, de-emphasize cron
+- [ ] **Store secrets in GitHub** — `DATABASE_URL`, `YOUTUBE_API_KEY`, `OPENAI_API_KEY` (user action)
+- [ ] **Test** — trigger workflow manually, verify new episode in app (user action)
 
 ### Phase 6C: Test Suite + CI
 Add tests and run them automatically on every push/PR. Catches regressions
@@ -223,15 +215,15 @@ streamlit run app/main.py
 ```
 
 ### Daily Pipeline
+Runs automatically via GitHub Actions (weekdays 18:00–20:00 UTC, weekends 18:15 UTC).
+
 ```bash
-# Full pipeline (incremental: only new/missing data)
+# Local run (incremental)
 bash scripts/run_pipeline.sh
 
 # Re-process all or limit
 bash scripts/run_pipeline.sh --all
 bash scripts/run_pipeline.sh --max 3
-
-# Writes to DATABASE_URL (Neon). No git commit of DB — pipeline runs locally or via GitHub Actions.
 ```
 
 ### Dictionary
@@ -361,3 +353,8 @@ python scripts/convert_dictionary_to_sqlite.py
   - translate_segments: episodes with untranslated segments
   - extract_topics: episodes missing topics
   - fetch_related_articles: already incremental
+
+### Mar 19, 2026 (continued)
+- **Phase 6B: GitHub Actions**
+  - `.github/workflows/daily_pipeline.yml` — scheduled + manual trigger
+  - run_pipeline.sh: OPENAI_API_KEY from env or .env (CI-friendly)

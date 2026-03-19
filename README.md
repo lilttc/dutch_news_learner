@@ -252,6 +252,10 @@ cd frontend && npm run dev
 
 ### Daily Pipeline
 
+The pipeline runs automatically via **GitHub Actions** (weekdays 18:00–20:00 UTC, weekends 18:15 UTC). No manual steps needed.
+
+For local runs:
+
 ```bash
 # Process new episodes (incremental: only what's missing)
 bash scripts/run_pipeline.sh
@@ -259,9 +263,6 @@ bash scripts/run_pipeline.sh
 # Re-process all or limit scope
 bash scripts/run_pipeline.sh --all      # Re-process everything
 bash scripts/run_pipeline.sh --max 5   # Limit to 5 newest per step
-
-# Local cron (alternative to GitHub Actions)
-# 0 20 * * * cd /path/to/dutch_news_learner && bash scripts/run_pipeline.sh >> logs/pipeline.log 2>&1
 ```
 
 **Source:** NOS Journaal in Makkelijke Taal channel uploads — Dutch news in easy language.
@@ -281,7 +282,7 @@ bash scripts/run_pipeline.sh --max 5   # Limit to 5 newest per step
 | **5B** | Video-transcript UX (in-page timestamp seeking) | ✅ Done |
 | **5C** | Quiz system (translation multiple choice, spaced repetition) | Up next |
 | **6A** | PostgreSQL (Neon) + cloud migration | ✅ Done |
-| **6B** | GitHub Actions daily pipeline | Planned |
+| **6B** | GitHub Actions daily pipeline | ✅ Done |
 | **6C** | User auth + proper hosting | Planned |
 | **7** | AI features (RAG search, AI explanations) | Future |
 
