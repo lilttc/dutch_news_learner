@@ -54,7 +54,7 @@ def insert_rows(pg_engine, table: str, rows: list[dict], dry_run: bool) -> int:
         return 0
 
     inspector = inspect(pg_engine)
-    pk_cols = [col["name"] for col in inspector.get_pk_constraint(table).get("constrained_columns", [])]
+    pk_cols = inspector.get_pk_constraint(table).get("constrained_columns", [])
 
     inserted = 0
     with pg_engine.begin() as conn:
