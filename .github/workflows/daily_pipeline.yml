@@ -1,0 +1,33 @@
+name: Daily Pipeline
+
+on:
+  schedule:
+    # Weekdays: every 15 min from 18:00–20:00 UTC (NOS uploads ~18:00, sometimes late)
+    - cron: '*/15 18-20 * * 1-5'
+    # Weekends: once at 18:15 UTC
+    - cron: '15 18 * * 0,6'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m spacy download nl_core_news_md
+
+      - name: Run pipeline
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: bash scripts/run_pipeline.sh
