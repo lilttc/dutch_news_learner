@@ -1,8 +1,6 @@
 name: Daily Pipeline
 
 on:
-  push:
-    branches: [feature/github-actions-pipeline]
   schedule:
     # 15:00–20:00 UTC = 6pm–8pm Amsterdam (CEST) — when new episodes typically air
     # check_episode_needed.py compares playlist vs DB; runs whenever triggered
