@@ -16,6 +16,7 @@ Examples:
 import argparse
 import os
 import sys
+import time
 from datetime import datetime
 from typing import Optional, Tuple
 
@@ -65,16 +66,20 @@ def extract_vocabulary_for_episode(
     if not segments:
         return 0, 0
 
+    t0 = time.time()
     vocab_dict = extractor.extract_from_segments(segments)
+    print(f"    NLP done: {len(vocab_dict)} lemmas ({time.time()-t0:.1f}s)", flush=True)
 
     if replace_existing:
+        t1 = time.time()
         session.query(EpisodeVocabulary).filter_by(episode_id=episode.id).delete()
+        print(f"    DELETE done ({time.time()-t1:.1f}s)", flush=True)
 
     items_created = 0
     rows_created = 0
 
+    t2 = time.time()
     for lemma, data in vocab_dict.items():
-        # Get or create VocabularyItem
         vocab_item = session.query(VocabularyItem).filter_by(lemma=lemma).first()
         if vocab_item is None:
             vocab_item = VocabularyItem(lemma=lemma, pos=data["pos"])
@@ -82,7 +87,6 @@ def extract_vocabulary_for_episode(
             session.flush()
             items_created += 1
 
-        # Create EpisodeVocabulary link
         surface_forms_str = (
             "|".join(data.get("surface_forms", []))
             if data.get("surface_forms")
@@ -98,6 +102,7 @@ def extract_vocabulary_for_episode(
         )
         session.add(ep_vocab)
         rows_created += 1
+    print(f"    DB inserts done: {rows_created} rows ({time.time()-t2:.1f}s)", flush=True)
 
     return items_created, rows_created
 
@@ -169,13 +174,16 @@ def run_extraction(
         print(f"[{idx}/{len(episodes)}] {episode.title[:50]}...")
         print(f"  Episode ID: {episode.id} | Video: {episode.video_id}")
 
-        # Eager-load segments
+        print(f"  Loading segments...", flush=True)
         episode.subtitle_segments  # Trigger lazy load
+        print(f"  Segments loaded: {len(episode.subtitle_segments)}", flush=True)
 
         try:
+            print(f"  Running spaCy + extraction...", flush=True)
             items, rows = extract_vocabulary_for_episode(
                 session, episode, extractor, replace_existing=replace_existing
             )
+            print(f"  Committing to database...", flush=True)
             session.commit()
             total_items += items
             total_rows += rows

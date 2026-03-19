@@ -221,13 +221,22 @@ def get_engine(db_url: str | None = None):
     url = _resolve_url(db_url)
 
     if _is_postgres(url):
-        return create_engine(
+        from sqlalchemy import event
+
+        eng = create_engine(
             url,
             echo=False,
             pool_size=5,
             max_overflow=10,
             connect_args={"sslmode": "require"},
         )
+
+        @event.listens_for(eng, "connect")
+        def _reset_lock_timeout(dbapi_conn, connection_record):
+            with dbapi_conn.cursor() as cur:
+                cur.execute("SET lock_timeout = '0'")
+
+        return eng
 
     return create_engine(url, echo=False)
 
@@ -257,6 +266,18 @@ def init_db(db_url: str | None = None):
     return engine
 
 
+def _pg_add_column(table: str, column: str, col_type: str) -> str:
+    """Generate a Postgres DO-block that adds a column only if it doesn't exist."""
+    return f"""DO $$ BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name='{table}' AND column_name='{column}'
+        ) THEN
+            ALTER TABLE {table} ADD COLUMN {column} {col_type};
+        END IF;
+    END $$"""
+
+
 def _migrate_schema(engine):
     """Add new columns / tables to existing schema (idempotent).
 
@@ -269,27 +290,53 @@ def _migrate_schema(engine):
     pg = _is_postgres(str(engine.url))
     pk = "SERIAL PRIMARY KEY" if pg else "INTEGER PRIMARY KEY"
 
-    migrations = [
-        "ALTER TABLE episode_vocabulary ADD COLUMN surface_forms TEXT",
-        "ALTER TABLE subtitle_segments ADD COLUMN translation_en TEXT",
-        "ALTER TABLE episodes ADD COLUMN topics TEXT",
-        "ALTER TABLE episodes ADD COLUMN related_articles TEXT",
-        "ALTER TABLE vocabulary_items ALTER COLUMN translation TYPE TEXT" if pg else None,
-        f"""CREATE TABLE IF NOT EXISTS user_vocabulary (
-            id {pk},
-            user_id INTEGER NOT NULL DEFAULT 1,
-            vocabulary_id INTEGER NOT NULL REFERENCES vocabulary_items(id),
-            status VARCHAR(20) NOT NULL DEFAULT 'new',
-            created_at TIMESTAMP,
-            updated_at TIMESTAMP
-        )""",
-        "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_user_id ON user_vocabulary(user_id)",
-        "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_vocabulary_id ON user_vocabulary(vocabulary_id)",
-        "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_status ON user_vocabulary(status)",
-    ]
+    if pg:
+        migrations = [
+            _pg_add_column("episode_vocabulary", "surface_forms", "TEXT"),
+            _pg_add_column("subtitle_segments", "translation_en", "TEXT"),
+            _pg_add_column("episodes", "topics", "TEXT"),
+            _pg_add_column("episodes", "related_articles", "TEXT"),
+            """DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='vocabulary_items' AND column_name='translation'
+                    AND data_type='character varying'
+                ) THEN
+                    ALTER TABLE vocabulary_items ALTER COLUMN translation TYPE TEXT;
+                END IF;
+            END $$""",
+            f"""CREATE TABLE IF NOT EXISTS user_vocabulary (
+                id {pk},
+                user_id INTEGER NOT NULL DEFAULT 1,
+                vocabulary_id INTEGER NOT NULL REFERENCES vocabulary_items(id),
+                status VARCHAR(20) NOT NULL DEFAULT 'new',
+                created_at TIMESTAMP,
+                updated_at TIMESTAMP
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_user_id ON user_vocabulary(user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_vocabulary_id ON user_vocabulary(vocabulary_id)",
+            "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_status ON user_vocabulary(status)",
+        ]
+    else:
+        migrations = [
+            "ALTER TABLE episode_vocabulary ADD COLUMN surface_forms TEXT",
+            "ALTER TABLE subtitle_segments ADD COLUMN translation_en TEXT",
+            "ALTER TABLE episodes ADD COLUMN topics TEXT",
+            "ALTER TABLE episodes ADD COLUMN related_articles TEXT",
+            f"""CREATE TABLE IF NOT EXISTS user_vocabulary (
+                id {pk},
+                user_id INTEGER NOT NULL DEFAULT 1,
+                vocabulary_id INTEGER NOT NULL REFERENCES vocabulary_items(id),
+                status VARCHAR(20) NOT NULL DEFAULT 'new',
+                created_at TIMESTAMP,
+                updated_at TIMESTAMP
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_user_id ON user_vocabulary(user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_vocabulary_id ON user_vocabulary(vocabulary_id)",
+            "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_status ON user_vocabulary(status)",
+        ]
+
     for sql in migrations:
-        if sql is None:
-            continue
         try:
             with engine.begin() as conn:
                 conn.execute(text(sql))
