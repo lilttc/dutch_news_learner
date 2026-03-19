@@ -22,6 +22,9 @@ from typing import Optional, Tuple
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from src.dictionary import get_lookup
 from src.models import (
     Base,
