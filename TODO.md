@@ -85,97 +85,93 @@ Phase 6 (Postgres + proper hosting). Not urgent — Streamlit serves well for no
 
 ---
 
-## Pick Up Here (Mar 17)
+## Pick Up Here (Mar 18)
 
-### Housekeeping (do first)
-- [x] **Run daily pipeline** for Mar 16 episode ✅
-- [x] **Push updated DB** so Streamlit Cloud + Render get new episodes ✅
-- [~] **Cron job** — deferred. Machine not always on; manually running `run_pipeline.sh` for now.
+### Phase 6A: Database Migration to Cloud Postgres (PRIORITY)
+Migrate from SQLite-in-git to a cloud Postgres database. This unblocks
+automated pipelines and eliminates the growing binary DB in git history.
 
-### Phase 5A: Vocabulary Quality (PRIORITY — blocks quiz system)
-User testing revealed missing/wrong definitions and missed verbs.
-These must be fixed before building the quiz — quizzing on bad data is worse than no quiz.
+- [ ] **Choose provider** — Azure Database for Postgres (free tier),
+      AWS RDS, Neon, or Supabase. Discuss Mar 18.
+- [ ] **Set up cloud Postgres** — create instance, configure access
+- [ ] **Update `get_engine()`** — read `DATABASE_URL` env var, keep SQLite fallback for local dev
+- [ ] **Adapt `_migrate_schema()`** — Postgres-compatible DDL (some SQLite syntax differs)
+- [ ] **Write migration script** — one-time copy: SQLite → Postgres (episodes, vocab, user data, quiz)
+- [ ] **Migrate dictionary** — either Postgres table or keep as local SQLite file (read-only, small)
+- [ ] **Update secrets** — Streamlit Cloud, Render/Vercel, `.env` for local dev
+- [ ] **Test end-to-end** — pipeline writes to Postgres, Streamlit reads from Postgres
+- [ ] **Remove `data/dutch_news.db` from git** — add to `.gitignore`
 
-**Problem 1: Missing English meanings** ✅ SOLVED
-Words like "geblust", "geschrokken", "indringen" have no translation.
-The dictionary only covers base forms; inflected forms (past participles,
-conjugations) fall through.
+### Phase 6B: GitHub Actions Pipeline Automation
+Once DB is on Postgres, the pipeline can run in CI without committing data back to git.
 
-- [x] Write `scripts/enrich_vocab_llm.py` — batch LLM fill-in for vocabulary items
-      with no translation. Uses GPT-4o-mini to generate concise English definitions.
-      Batches 25 words per API call, includes POS + example sentence for context.
-      Only fills where dictionary has no entry.
-- [x] Added to pipeline: `run_pipeline.sh` step 4/7 (after dictionary, before translation)
-- [x] **Run:** `python scripts/enrich_vocab_llm.py --all` ✅
+- [ ] **Create `.github/workflows/daily_pipeline.yml`**
+      — install Python, deps, spaCy model (cached)
+      — run `scripts/run_pipeline.sh`
+      — writes directly to cloud Postgres (no git commit needed)
+- [ ] **Smart scheduling with retry window:**
+      — Weekdays: run every 15 min from 18:00–21:00 UTC (NOS uploads ~18:00,
+        sometimes late). Pipeline is idempotent — skips existing episodes, so
+        extra runs are harmless and finish fast if nothing new.
+      — Weekends: run once at 18:15 UTC (or skip if NOS doesn't upload weekends)
+      — Cron: `*/15 18-20 * * 1-5` (weekdays) + `15 18 * * 0,6` (weekends)
+- [ ] **Store secrets in GitHub** — `DATABASE_URL`, `YOUTUBE_API_KEY`, `OPENAI_API_KEY`
+- [ ] **Add error notifications** — GitHub sends email on failure by default
+- [ ] **Test** — trigger workflow manually (`workflow_dispatch`), verify new episode in app
+- [ ] **Update `run_pipeline.sh`** — support `DATABASE_URL` env var
+- [ ] **Remove cron instructions from README/TODO** — replaced by GitHub Actions
 
-**Problem 2: Separable verbs not detected** ✅ SOLVED
-"aanvallen" appears as "vallen ... aan" in text. spaCy lemmatizes to "vallen"
-(to fall) instead of "aanvallen" (to attack). Common Dutch pattern.
+### Phase 6C: Test Suite + CI
+Add tests and run them automatically on every push/PR. Catches regressions
+before they reach prod and demonstrates CI/CD skills.
 
-- [x] Built `SeparableVerbRecombiner` in `src/processing/vocabulary.py`
-      — Strategy 1: spaCy dep parsing (svp / compound:prt labels)
-      — Strategy 2: end-of-clause heuristic (particle at sentence end + verb earlier)
-      — Both validate combined form against dictionary DB to avoid false positives
-- [x] Integrated into `VocabularyExtractor` — enabled when dictionary is loaded
-- [x] Updated `scripts/extract_vocabulary.py` to pass dictionary lookup to extractor
-- [x] **Run:** `python scripts/extract_vocabulary.py --all` ✅ re-extracted with separable verbs
-- [x] **Then:** `python scripts/enrich_vocab_llm.py --all` ✅ filled new words' translations
+- [ ] **Set up pytest** — `tests/` directory, `pytest.ini` or `pyproject.toml` config
+- [ ] **Unit tests: quiz generator** — question type selection, distractor picking,
+      frequency filter, masking, answer checking. Pure functions, easy to test.
+- [ ] **Unit tests: vocabulary processing** — separable verb recombination,
+      extraction with known edge cases
+- [ ] **Integration tests: FastAPI endpoints** — use `TestClient`, test episode list,
+      episode detail, quiz generate/submit, vocabulary status update
+- [ ] **DB fixtures** — in-memory SQLite for test isolation (no cloud DB needed)
+- [ ] **Create `.github/workflows/test.yml`**
+      — trigger: on push to any branch + on pull request
+      — install deps, run `pytest --cov` with coverage report
+      — fail PR if tests fail
+- [ ] **Add coverage badge to README** (optional, nice-to-have)
 
-### Phase 5B: Video-Transcript UX
-- [x] **Timestamp seeks embedded video** ✅ — uses YouTube iframe API `postMessage`
-      to seek the embedded player instead of opening a new tab.
-      - Streamlit: transcript component reaches into parent document via
-        `window.parent.document.getElementById('yt-player')` to send postMessage
-        commands. Falls back to opening new tab if cross-origin blocked.
-      - Next.js: `EpisodeView` holds iframe ref, passes `seekTo` callback to
-        `Transcript` component. Timestamps are buttons, not links.
-      - Both: embed URL includes `enablejsapi=1` to enable the YouTube JS API.
-- [ ] **Transcript auto-scroll** (stretch) — track video currentTime via API polling,
-      highlight and scroll to the matching subtitle segment. Higher effort.
+### Phase 5C: Quiz System (on `quiz-improvements` branch)
+Initial quiz code is on main. Improvements (frequency filter, all-MC, English
+translations, skip known words) are in progress on a feature branch.
+Merge to main when polished.
 
-### Phase 5C: Quiz System
-Build only after Phase 5A is done (vocabulary quality must be solid first).
+- [ ] Fix frequency filter — skip words appearing in >30% of episodes (too basic)
+- [ ] All questions are MC — cloze uses word options, not text input
+- [ ] English-only translations for NL→EN / EN→NL questions (dictionary `gloss_en`)
+- [ ] Skip "known" words in episode quiz
+- [ ] Session cache invalidation when quiz format changes
+- [ ] Consider: integrate frequency list (Subtlex-NL or similar) for CEFR-level targeting
+- [ ] Consider: dbt transformation layer for quiz analytics (words learned/week, score trends)
 
-- [ ] Design quiz question types (translation multiple choice first)
-- [ ] Build quiz generation logic (`src/quiz/generator.py`)
-  - Pick words from: today's episode + saved "learning" words + previously wrong
-  - Generate 3 distractors: same POS, similar frequency
-- [ ] Add quiz page to Streamlit app
-- [ ] Store results in `QuizSession` + `QuizItem` tables (already in schema)
-- [ ] Track quiz performance in `UserVocabulary` (times_correct, times_incorrect)
+### Backlog
 
-### Streamlit Polish (quick wins, do anytime)
-- [ ] Add welcome message / episode count on homepage
-- [ ] Test mobile UX on phone, fix layout issues
-- [ ] Share with friends, gather feedback
+**Transcript & Bubbles:**
+- [ ] Merge subtitle segments into sentences (group by punctuation, not by second)
+- [ ] Show infinitive/base form in vocabulary bubble when clicked word is conjugated
+      (data already exists: `VocabularyItem.lemma`; display change only)
+- [ ] Transcript auto-scroll with video playback (high effort)
 
----
+**Dictionary Quality:**
+- [ ] Fill missing `gloss_en` — LLM pass specifically targeting words without English translation
+- [ ] Validate dictionary entries — reject garbage (meaning = single inflected form,
+      example = just the word itself, e.g. "helftes" → meaning "helft", example "helftes.")
+- [ ] Idiom detection + dictionary (Phase 7) — multi-word expressions, spaCy Matcher
+      or curated Dutch idiom list. High learning value for users.
 
-## Phase 6: Postgres + Proper Hosting
-
-This phase promotes the Next.js app to production and solves the data-in-git problem.
-
-### Database Migration
-- [ ] Set up PostgreSQL (Supabase or Neon free tier)
-- [ ] Write migration script: SQLite → Postgres (episodes, vocabulary, user data)
-- [ ] Migrate dictionary from SQLite file to Postgres table
-- [ ] Update `get_engine()` to read `DATABASE_URL` env var
-- [ ] Remove data files from git (dutch_news.db, dutch_glosses.db)
-
-### User System
-- [ ] Supabase auth (email / Google login)
-- [ ] Per-user vocabulary tracking (replace user_id=1 hardcode)
-
-### Hosting Upgrade
-- [ ] Move FastAPI to Render Starter ($7/mo) or Railway — eliminates cold starts
-- [ ] Or: rewrite API as Next.js API routes (everything on Vercel, free)
-- [ ] Promote Next.js + Vercel as primary public app
-- [ ] Retire Streamlit deployment
-
-### Analytics
-- [ ] Verify Vercel Analytics collecting data
-- [ ] PostHog integration for deeper analytics
-- [ ] Learning-specific event tracking (episode views, word lookups)
+**Platform:**
+- [ ] Streamlit polish: welcome message, episode count, mobile UX
+- [ ] User system: auth, per-user vocabulary tracking
+- [ ] Hosting upgrade: promote Next.js to primary, retire Streamlit
+- [ ] Analytics: Vercel Analytics, PostHog, learning event tracking
 
 ---
 
@@ -227,23 +223,18 @@ streamlit run app/main.py
 
 ### Daily Pipeline
 ```bash
-# Full pipeline (one command)
+# Full pipeline (one command) — writes to DATABASE_URL if set, else local SQLite
 bash scripts/run_pipeline.sh
 
 # With limits
 bash scripts/run_pipeline.sh --max 3
 
-# After pipeline, push updated DB for deployments
+# If still using SQLite: push updated DB for deployments
 git add data/dutch_news.db
 git commit -m "Update DB with new episodes"
 git push origin main
-```
 
-### Cron Setup
-```bash
-crontab -e
-# Run daily at 20:00 (NOS uploads weekdays around 17:00-18:00)
-0 20 * * * cd /path/to/dutch_news_learner && bash scripts/run_pipeline.sh >> logs/pipeline.log 2>&1
+# Once on Postgres + GitHub Actions: pipeline runs automatically, no manual steps
 ```
 
 ### Dictionary
@@ -278,7 +269,10 @@ python scripts/convert_dictionary_to_sqlite.py
 | NLP Pipeline | spaCy tokenization, lemmatization, POS tagging |
 | Cloud Deployment | Streamlit Cloud, Vercel, Render |
 | Performance Optimization | N+1 query fix, dictionary SQLite migration |
-| PostgreSQL + Supabase | Database + auth (Phase 6) |
+| PostgreSQL (Azure/AWS) | Cloud DB migration, connection management |
+| CI/CD (GitHub Actions) | Automated daily pipeline, test suite on PR, scheduled workflows |
+| Testing (pytest) | Unit + integration tests, DB fixtures, coverage |
+| dbt (potential) | Data transformation layer for quiz analytics |
 | RAG / Vector Search | Semantic episode search (Phase 7) |
 
 ---
@@ -334,4 +328,22 @@ python scripts/convert_dictionary_to_sqlite.py
 - Updated README (roadmap, project structure, tech stack, features, quick start)
 - Updated ARCHITECTURE (enrichment chain, separable verbs, data model ERD,
   processing module, API layer, dependencies, design decisions)
-- Next: Phase 5C (Quiz system)
+- **Phase 5C: Quiz system** — initial implementation shipped to main:
+  - DB models: `QuizSession` + `QuizItem` with migrations
+  - Generator: `src/quiz/generator.py` — template-based, 3 question types
+    (NL→EN, EN→NL, sentence fill-in), episode quiz + daily review
+  - Streamlit: Quiz tab on episode page + Daily Review button in sidebar
+  - FastAPI: `GET /api/quiz/episode/{id}`, `GET /api/quiz/daily`, `POST /api/quiz/submit`
+  - Next.js: `Quiz.tsx` component + API types
+- **Quiz user testing** — found issues:
+  - Mixed Dutch/English definitions in MC options
+  - Cloze (text input) too difficult → should be MC
+  - Too many questions (10 → 5)
+  - Basic words (vandaag, doen) shouldn't be quizzed
+  - Started fixes: frequency filter, all-MC, dictionary gloss_en for English
+  - Decision: move quiz improvements to `quiz-improvements` branch
+- **Reprioritized roadmap:**
+  - Phase 6A (DB migration to cloud Postgres) promoted to top priority
+  - Phase 6B (GitHub Actions pipeline) follows immediately after
+  - Quiz improvements continue on branch, merge when ready
+  - Considering AWS/Azure for Postgres (CV value: Azure, dbt potential)
