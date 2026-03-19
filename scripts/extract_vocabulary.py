@@ -5,12 +5,13 @@ Extract vocabulary from ingested episodes using spaCy NLP.
 Processes subtitle segments for each episode: tokenizes, lemmatizes, filters by POS
 (NOUN, VERB, ADJ, ADV), and stores vocabulary in VocabularyItem and EpisodeVocabulary tables.
 
-Usage:
-    python scripts/extract_vocabulary.py [--episode-id ID] [--all] [--init-db]
+By default, only processes episodes that have transcripts but no vocabulary yet (incremental).
+Use --all to re-process all episodes, or --max N to limit scope.
 
-Examples:
+Usage:
+    python scripts/extract_vocabulary.py                 # Only episodes missing vocabulary (incremental)
     python scripts/extract_vocabulary.py --all          # Process all episodes
-    python scripts/extract_vocabulary.py --max 3         # Process latest 3 episodes
+    python scripts/extract_vocabulary.py --max 3       # Limit to 3 most recent (within scope)
 """
 
 import argparse
@@ -111,15 +112,17 @@ def run_extraction(
     max_episodes: Optional[int] = None,
     episode_id: Optional[int] = None,
     replace_existing: bool = True,
+    incremental: bool = True,
     db_path: str | None = None,
 ) -> None:
     """
     Run vocabulary extraction on episodes in the database.
 
     Args:
-        max_episodes: Process only the N most recent episodes (by published_at). None = all.
-        episode_id: Process only this episode ID. Overrides max_episodes if set.
+        max_episodes: Process only the N most recent episodes (by published_at). None = all in scope.
+        episode_id: Process only this episode ID. Overrides other filters if set.
         replace_existing: If True, replace existing vocabulary for each episode.
+        incremental: If True (default), only process episodes that have no vocabulary yet.
         db_path: Database URL (default: DATABASE_URL env var, then SQLite).
     """
     engine = get_engine(db_path)
@@ -128,7 +131,7 @@ def run_extraction(
     _migrate_schema(engine)
     session = get_session(engine)
 
-    # Build query
+    # Build query: episodes with transcripts, newest first
     query = (
         session.query(Episode)
         .filter(Episode.transcript_fetched == True)
@@ -142,20 +145,26 @@ def run_extraction(
             print(f"❌ No episode found with id={episode_id}")
             session.close()
             return
-    elif max_episodes is not None:
-        episodes = query.limit(max_episodes).all()
     else:
+        # Incremental: only episodes that have no episode_vocabulary rows
+        if incremental:
+            episodes_with_vocab = session.query(EpisodeVocabulary.episode_id).distinct()
+            query = query.filter(~Episode.id.in_(episodes_with_vocab))
+        if max_episodes is not None:
+            query = query.limit(max_episodes)
         episodes = query.all()
 
     if not episodes:
-        print("❌ No episodes with transcripts found. Run ingest_playlist.py first.")
+        msg = "No episodes need vocabulary extraction." if incremental else "No episodes with transcripts found."
+        print(f"❌ {msg} Run ingest_playlist.py first.")
         session.close()
         return
 
     print("=" * 70)
     print("Dutch News Learner — Vocabulary Extraction")
     print("=" * 70)
-    print(f"Episodes to process: {len(episodes)}")
+    mode = "incremental (missing vocabulary only)" if incremental else "all episodes"
+    print(f"Episodes to process: {len(episodes)} ({mode})")
 
     # Load dictionary for separable verb recombination
     lookup = get_lookup()
@@ -215,13 +224,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--all",
         action="store_true",
-        help="Process all episodes (default if no other limit given)",
+        help="Process all episodes (re-process even those with vocabulary)",
     )
     parser.add_argument(
         "--max",
         type=int,
         metavar="N",
-        help="Process only the N most recent episodes",
+        help="Limit to N most recent episodes (within incremental or all scope)",
     )
     parser.add_argument(
         "--episode-id",
@@ -248,12 +257,10 @@ if __name__ == "__main__":
         init_db(args.db)
         print()
 
-    max_episodes = args.max if args.max is not None else (None if args.all else 5)
-    episode_id = args.episode_id
-
     run_extraction(
-        max_episodes=max_episodes,
-        episode_id=episode_id,
+        max_episodes=args.max,
+        episode_id=args.episode_id,
         replace_existing=not args.no_replace,
+        incremental=not args.all,
         db_path=args.db,
     )

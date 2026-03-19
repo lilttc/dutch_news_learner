@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 #
 # Daily pipeline for Dutch News Learner.
-# Runs all enrichment steps in order — each script skips already-processed episodes.
+# Runs all enrichment steps in order. By default, each step only processes
+# episodes that need it (incremental). Pass --all to re-process everything,
+# or --max N to limit scope.
 #
 # Usage:
-#   bash scripts/run_pipeline.sh            # Full pipeline
-#   bash scripts/run_pipeline.sh --max 3    # Limit to 3 newest episodes per step
+#   bash scripts/run_pipeline.sh            # Incremental (only new/missing data)
+#   bash scripts/run_pipeline.sh --all      # Re-process all episodes
+#   bash scripts/run_pipeline.sh --max 3    # Limit to 3 newest per step
 #
 # Cron example (run daily at 20:00):
 #   0 20 * * * cd /path/to/dutch_news_learner && bash scripts/run_pipeline.sh >> logs/pipeline.log 2>&1

@@ -5,13 +5,17 @@ Translate subtitle segments from Dutch to English using OpenAI.
 Stores translations in SubtitleSegment.translation_en. Idempotent: skips segments
 that already have a translation. Similar to tai8bot episode summarization.
 
+By default, only processes episodes that have segments needing translation (incremental).
+Use --all to process all episodes, or --max N to limit scope.
+
 Requires: OPENAI_API_KEY in .env
 
 Usage:
+    python scripts/translate_segments.py                 # Only episodes with untranslated segments
     python scripts/translate_segments.py --all          # All episodes
-    python scripts/translate_segments.py --max 5        # Latest 5 episodes
+    python scripts/translate_segments.py --max 5        # Limit to 5 most recent (within scope)
     python scripts/translate_segments.py --episode-id 427
-    python scripts/translate_segments.py --dry-run     # Show what would be translated
+    python scripts/translate_segments.py --dry-run      # Show what would be translated
 """
 
 import argparse
@@ -26,7 +30,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from openai import OpenAI
-from sqlalchemy.orm import joinedload
+from sqlalchemy import or_
 
 from src.models import Episode, SubtitleSegment, _migrate_schema, get_engine, get_session
 
@@ -112,7 +116,7 @@ def translate_segments_for_episode(
 
 def main():
     parser = argparse.ArgumentParser(description="Translate subtitle segments to English via OpenAI")
-    parser.add_argument("--all", action="store_true", help="Process all episodes")
+    parser.add_argument("--all", action="store_true", help="Process all episodes (re-process even fully translated)")
     parser.add_argument("--max", type=int, metavar="N", help="Process only N most recent episodes")
     parser.add_argument("--episode-id", type=int, metavar="ID", help="Process only this episode")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be translated")
@@ -139,21 +143,33 @@ def main():
         if not episodes:
             print(f"Episode {args.episode_id} not found.")
             sys.exit(1)
-    elif args.max:
-        episodes = query.limit(args.max).all()
-    elif args.all:
-        episodes = query.all()
     else:
-        episodes = query.limit(5).all()
+        # Incremental: only episodes with segments needing translation
+        if not args.all:
+            has_untranslated = (
+                session.query(SubtitleSegment.episode_id)
+                .filter(
+                    or_(
+                        SubtitleSegment.translation_en.is_(None),
+                        SubtitleSegment.translation_en == "",
+                    )
+                )
+                .distinct()
+            )
+            query = query.filter(Episode.id.in_(has_untranslated))
+        if args.max:
+            query = query.limit(args.max)
+        episodes = query.all()
 
     if not episodes:
-        print("No episodes with transcripts found.")
+        print("No episodes need translation." if not args.all else "No episodes with transcripts found.")
         sys.exit(0)
 
     print("=" * 60)
     print("Dutch News Learner — Translate Segments")
     print("=" * 60)
-    print(f"Episodes: {len(episodes)}")
+    mode = "incremental (untranslated segments only)" if not args.all else "all episodes"
+    print(f"Episodes: {len(episodes)} ({mode})")
     print(f"Model: {MODEL} | Batch size: {BATCH_SIZE}")
     if args.dry_run:
         print("(Dry run — no changes)")

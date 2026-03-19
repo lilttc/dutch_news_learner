@@ -5,11 +5,15 @@ Extract 3 topic keywords per episode for Related reading links.
 Uses OpenAI to extract topics from title + description (or first transcript lines).
 Stores in Episode.topics as pipe-separated: "topic1|topic2|topic3".
 
+By default, only processes episodes that have transcripts but no topics yet (incremental).
+Use --all to process all episodes, or --max N to limit scope.
+
 Requires: OPENAI_API_KEY in .env
 
 Usage:
+    python scripts/extract_topics.py                 # Only episodes missing topics
     python scripts/extract_topics.py --all          # All episodes
-    python scripts/extract_topics.py --max 5       # Latest 5 episodes
+    python scripts/extract_topics.py --max 5       # Limit to 5 most recent (within scope)
     python scripts/extract_topics.py --episode-id 427
     python scripts/extract_topics.py --dry-run     # Show what would be extracted
 """
@@ -106,7 +110,7 @@ def extract_topics_for_episode(session, episode: Episode, client: OpenAI, dry_ru
 
 def main():
     parser = argparse.ArgumentParser(description="Extract topic keywords for Related reading")
-    parser.add_argument("--all", action="store_true", help="Process all episodes")
+    parser.add_argument("--all", action="store_true", help="Process all episodes (re-extract even those with topics)")
     parser.add_argument("--max", type=int, metavar="N", help="Process only N most recent episodes")
     parser.add_argument("--episode-id", type=int, metavar="ID", help="Process only this episode")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be extracted")
@@ -133,21 +137,25 @@ def main():
         if not episodes:
             print(f"Episode {args.episode_id} not found.")
             sys.exit(1)
-    elif args.max:
-        episodes = query.limit(args.max).all()
-    elif args.all:
-        episodes = query.all()
     else:
-        episodes = query.limit(5).all()
+        # Incremental: only episodes missing topics
+        if not args.all:
+            query = query.filter(
+                (Episode.topics.is_(None)) | (Episode.topics == "")
+            )
+        if args.max:
+            query = query.limit(args.max)
+        episodes = query.all()
 
     if not episodes:
-        print("No episodes with transcripts found.")
+        print("No episodes need topic extraction." if not args.all else "No episodes with transcripts found.")
         sys.exit(0)
 
     print("=" * 60)
     print("Dutch News Learner — Extract Topics")
     print("=" * 60)
-    print(f"Episodes: {len(episodes)}")
+    mode = "incremental (missing topics only)" if not args.all else "all episodes"
+    print(f"Episodes: {len(episodes)} ({mode})")
     print(f"Model: {MODEL}")
     if args.dry_run:
         print("(Dry run — no changes)")

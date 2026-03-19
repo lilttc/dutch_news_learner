@@ -193,7 +193,8 @@ def main():
     print("=" * 60)
     print("Dutch News Learner — Fetch Related Articles")
     print("=" * 60)
-    print(f"Episodes: {len(episodes)}")
+    mode = "incremental (missing articles only)" if not args.all else "all episodes with topics"
+    print(f"Episodes: {len(episodes)} ({mode})")
     if args.dry_run:
         print("(Dry run — no changes)")
     print()
