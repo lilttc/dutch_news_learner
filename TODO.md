@@ -171,6 +171,7 @@ Merge to main when polished.
       or curated Dutch idiom list. High learning value for users.
 
 **Platform:**
+- [ ] Clickable calendar view for episode selection by date
 - [ ] Streamlit polish: welcome message, episode count, mobile UX
 - [ ] User system: auth, per-user vocabulary tracking
 - [ ] Hosting upgrade: promote Next.js to primary, retire Streamlit
@@ -204,6 +205,7 @@ Merge to main when polished.
 | Error boundary for failed API calls (Next.js) | Medium | Small | |
 | Loading states / skeleton UI (Next.js) | Medium | Small | |
 | Episode navigation — prev/next buttons | Medium | Small | |
+| Clickable calendar view for episode selection by date | Medium | Medium | |
 | Favicon and Open Graph meta tags | Low | Small | |
 
 ---

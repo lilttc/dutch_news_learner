@@ -722,7 +722,7 @@ def main():
     query_episode = st.query_params.get("episode")
 
     episode_options = {
-        f"{ep.id} | {ep.published_at.strftime('%Y-%m-%d') if ep.published_at else '?'} — {ep.title[:45]}": ep.id
+        f"{ep.published_at.strftime('%Y-%m-%d') if ep.published_at else '?'} — {ep.title[:45]}": ep.id
         for ep in episodes
     }
     default_index = 0
