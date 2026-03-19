@@ -12,8 +12,11 @@ Run with: uvicorn src.api.main:app --reload --port 8000
 
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+load_dotenv()
 
 from src.models import _migrate_schema, get_engine
 

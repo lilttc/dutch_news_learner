@@ -31,7 +31,7 @@ def ingest_playlist(
     max_videos: int = None,
     skip_existing: bool = True,
     reverse: bool = False,
-    db_path: str = "sqlite:///data/dutch_news.db",
+    db_path: str | None = None,
 ):
     """
     Ingest a YouTube playlist into the database.
@@ -208,8 +208,8 @@ if __name__ == "__main__":
     parser.add_argument("--init-db", action="store_true", help="Initialize database first")
     parser.add_argument(
         "--db",
-        default="sqlite:///data/dutch_news.db",
-        help="Database URL",
+        default=None,
+        help="Database URL (default: DATABASE_URL env var, then SQLite fallback)",
     )
 
     args = parser.parse_args()

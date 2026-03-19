@@ -8,7 +8,6 @@ Run with: streamlit run app/main.py
 
 import json
 import re
-import shutil
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -17,6 +16,9 @@ from urllib.parse import quote_plus
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+
+from dotenv import load_dotenv
+load_dotenv(PROJECT_ROOT / ".env")
 
 import streamlit as st
 from sqlalchemy.orm import joinedload
@@ -40,34 +42,19 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Database — copy to /tmp if source is read-only (Streamlit Cloud)
-_SOURCE_DB = PROJECT_ROOT / "data" / "dutch_news.db"
-_TMP_DB = Path("/tmp/dutch_news.db")
-
-def _get_db_path() -> str:
-    if _SOURCE_DB.exists():
-        try:
-            _SOURCE_DB.open("a").close()
-            return f"sqlite:///{_SOURCE_DB}"
-        except OSError:
-            # Read-only filesystem (Streamlit Cloud): always re-copy so
-            # git updates are picked up after app reboots.
-            shutil.copy2(_SOURCE_DB, _TMP_DB)
-            return f"sqlite:///{_TMP_DB}"
-    return f"sqlite:///data/dutch_news.db"
-
-DB_PATH = _get_db_path()
-
 # Lemmas to exclude from vocabulary (show names, etc.)
 EXCLUDE_LEMMAS = {"journaal"}
 
 
 @st.cache_resource(ttl=3600)
 def get_db_session():
-    """Create database session. Cached for 1 hour, then refreshed."""
+    """Create database session. Cached for 1 hour, then refreshed.
+
+    Uses DATABASE_URL (Postgres) when set, otherwise falls back to local SQLite.
+    """
     from src.models import _migrate_schema
 
-    engine = get_engine(DB_PATH)
+    engine = get_engine()
     _migrate_schema(engine)
     return get_session(engine)
 

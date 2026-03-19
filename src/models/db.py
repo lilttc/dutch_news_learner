@@ -5,7 +5,9 @@ Adapted from tai8bot. Episode = one news video, SubtitleSegment = one subtitle l
 Vocabulary tables (VocabularyItem, EpisodeVocabulary, UserVocabulary) added in Phase 2.
 """
 
+import os
 from datetime import datetime
+
 from sqlalchemy import (
     Boolean,
     Column,
@@ -188,11 +190,46 @@ class EpisodeVocabulary(Base):
         return f"<EpisodeVocabulary(episode_id={self.episode_id}, vocab_id={self.vocabulary_id}, count={self.occurrence_count})>"
 
 
+# ---------------------------------------------------------------------------
 # Database helpers
+# ---------------------------------------------------------------------------
 
-def get_engine(db_url: str = "sqlite:///data/dutch_news.db"):
-    """Create database engine."""
-    return create_engine(db_url, echo=False)
+_SQLITE_FALLBACK = "sqlite:///data/dutch_news.db"
+
+
+def _resolve_url(db_url: str | None = None) -> str:
+    """Return the database URL to use.
+
+    Priority: explicit arg > DATABASE_URL env var > SQLite fallback.
+    """
+    if db_url:
+        return db_url
+    return os.environ.get("DATABASE_URL", _SQLITE_FALLBACK)
+
+
+def _is_postgres(url: str) -> bool:
+    return url.startswith("postgresql")
+
+
+def get_engine(db_url: str | None = None):
+    """Create a SQLAlchemy engine.
+
+    * Postgres (via DATABASE_URL): uses a connection pool (5 connections,
+      overflow to 10) and requires SSL for Neon.
+    * SQLite (local dev): simple single-connection engine.
+    """
+    url = _resolve_url(db_url)
+
+    if _is_postgres(url):
+        return create_engine(
+            url,
+            echo=False,
+            pool_size=5,
+            max_overflow=10,
+            connect_args={"sslmode": "require"},
+        )
+
+    return create_engine(url, echo=False)
 
 
 def get_session(engine=None):
@@ -203,39 +240,47 @@ def get_session(engine=None):
     return Session()
 
 
-def init_db(db_url: str = "sqlite:///data/dutch_news.db"):
-    """Initialize database (create all tables)."""
-    import os
+def init_db(db_url: str | None = None):
+    """Initialize database — create tables and run migrations."""
+    url = _resolve_url(db_url)
 
-    # Ensure data directory exists
-    db_dir = os.path.dirname(db_url.replace("sqlite:///", ""))
-    if db_dir:
-        os.makedirs(db_dir, exist_ok=True)
+    if not _is_postgres(url):
+        db_dir = os.path.dirname(url.replace("sqlite:///", ""))
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
 
-    engine = get_engine(db_url)
+    engine = get_engine(url)
     Base.metadata.create_all(engine)
     _migrate_schema(engine)
-    print(f"✅ Database initialized: {db_url}")
+    label = "Postgres" if _is_postgres(url) else url
+    print(f"✅ Database initialized: {label}")
     return engine
 
 
 def _migrate_schema(engine):
-    """Add new columns to existing tables (idempotent)."""
+    """Add new columns / tables to existing schema (idempotent).
+
+    Handles syntax differences between SQLite and Postgres:
+    - SQLite uses INTEGER PRIMARY KEY (auto-increment implied).
+    - Postgres uses SERIAL PRIMARY KEY.
+    """
     from sqlalchemy import text
+
+    pg = _is_postgres(str(engine.url))
+    pk = "SERIAL PRIMARY KEY" if pg else "INTEGER PRIMARY KEY"
 
     migrations = [
         "ALTER TABLE episode_vocabulary ADD COLUMN surface_forms TEXT",
         "ALTER TABLE subtitle_segments ADD COLUMN translation_en TEXT",
         "ALTER TABLE episodes ADD COLUMN topics TEXT",
         "ALTER TABLE episodes ADD COLUMN related_articles TEXT",
-        # UserVocabulary table for known/learning word tracking
-        """CREATE TABLE IF NOT EXISTS user_vocabulary (
-            id INTEGER PRIMARY KEY,
+        f"""CREATE TABLE IF NOT EXISTS user_vocabulary (
+            id {pk},
             user_id INTEGER NOT NULL DEFAULT 1,
             vocabulary_id INTEGER NOT NULL REFERENCES vocabulary_items(id),
             status VARCHAR(20) NOT NULL DEFAULT 'new',
-            created_at DATETIME,
-            updated_at DATETIME
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP
         )""",
         "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_user_id ON user_vocabulary(user_id)",
         "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_vocabulary_id ON user_vocabulary(vocabulary_id)",
@@ -246,4 +291,4 @@ def _migrate_schema(engine):
             with engine.begin() as conn:
                 conn.execute(text(sql))
         except Exception:
-            pass  # Column likely already exists
+            pass  # Column/table likely already exists

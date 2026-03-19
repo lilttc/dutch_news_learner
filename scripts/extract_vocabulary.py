@@ -103,7 +103,7 @@ def run_extraction(
     max_episodes: Optional[int] = None,
     episode_id: Optional[int] = None,
     replace_existing: bool = True,
-    db_path: str = "sqlite:///data/dutch_news.db",
+    db_path: str | None = None,
 ) -> None:
     """
     Run vocabulary extraction on episodes in the database.
@@ -112,7 +112,7 @@ def run_extraction(
         max_episodes: Process only the N most recent episodes (by published_at). None = all.
         episode_id: Process only this episode ID. Overrides max_episodes if set.
         replace_existing: If True, replace existing vocabulary for each episode.
-        db_path: Database URL.
+        db_path: Database URL (default: DATABASE_URL env var, then SQLite).
     """
     engine = get_engine(db_path)
     # Ensure vocabulary tables exist (create if missing, e.g. after model update)
@@ -226,8 +226,8 @@ if __name__ == "__main__":
     parser.add_argument("--init-db", action="store_true", help="Initialize database first")
     parser.add_argument(
         "--db",
-        default="sqlite:///data/dutch_news.db",
-        help="Database URL",
+        default=None,
+        help="Database URL (default: DATABASE_URL env var, then SQLite fallback)",
     )
 
     args = parser.parse_args()

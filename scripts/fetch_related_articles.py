@@ -159,7 +159,7 @@ def main():
     parser.add_argument("--max", type=int, metavar="N", help="Process only N most recent episodes")
     parser.add_argument("--episode-id", type=int, metavar="ID", help="Process only this episode")
     parser.add_argument("--dry-run", action="store_true", help="Preview without saving")
-    parser.add_argument("--db", default="sqlite:///data/dutch_news.db", help="Database URL")
+    parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var, then SQLite fallback)")
     args = parser.parse_args()
 
     engine = get_engine(args.db)

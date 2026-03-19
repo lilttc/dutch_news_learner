@@ -14,6 +14,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from src.dictionary import get_lookup
 from src.models import VocabularyItem, get_engine, get_session
 
@@ -21,7 +24,7 @@ from src.models import VocabularyItem, get_engine, get_session
 def main():
     parser = argparse.ArgumentParser(description="Enrich vocabulary with dictionary translations")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be updated")
-    parser.add_argument("--db", default="sqlite:///data/dutch_news.db", help="Database URL")
+    parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var, then SQLite fallback)")
     args = parser.parse_args()
 
     lookup = get_lookup()

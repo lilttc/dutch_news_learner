@@ -110,7 +110,7 @@ def main():
     parser.add_argument("--max", type=int, metavar="N", help="Process only N most recent episodes")
     parser.add_argument("--episode-id", type=int, metavar="ID", help="Process only this episode")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be extracted")
-    parser.add_argument("--db", default="sqlite:///data/dutch_news.db", help="Database URL")
+    parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var, then SQLite fallback)")
     args = parser.parse_args()
 
     api_key = os.environ.get("OPENAI_API_KEY")

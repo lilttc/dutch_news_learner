@@ -12,6 +12,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from src.models import (
     Episode,
     EpisodeVocabulary,
@@ -93,7 +96,7 @@ def main():
     parser.add_argument("--recurring", action="store_true", help="Show recurring words")
     parser.add_argument("--episode-id", type=int, help="Filter vocabulary by episode ID")
     parser.add_argument("--top", type=int, default=20, help="Limit rows (default: 20)")
-    parser.add_argument("--db", default="sqlite:///data/dutch_news.db", help="Database URL")
+    parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var, then SQLite fallback)")
 
     args = parser.parse_args()
 

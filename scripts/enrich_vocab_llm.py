@@ -174,7 +174,7 @@ def main():
         help="Max words to process (default: 200)",
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview without saving")
-    parser.add_argument("--db", default="sqlite:///data/dutch_news.db", help="Database URL")
+    parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var, then SQLite fallback)")
     args = parser.parse_args()
 
     api_key = os.environ.get("OPENAI_API_KEY")
