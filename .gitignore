@@ -21,8 +21,10 @@ data/dictionary/dutch_english_fallback.json
 data/dictionary/dutch_glosses.json
 *.sqlite
 
-# Keep these for deployment (Streamlit Cloud + Render):
-# data/dutch_news.db (~25MB)
+# Main database now lives in Neon Postgres — no longer tracked in git
+data/dutch_news.db
+
+# Keep for deployment (dictionary is read-only, small enough for git):
 # data/dictionary/dutch_glosses.db (~65MB, converted from JSON)
 
 # Node

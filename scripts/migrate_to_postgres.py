@@ -5,6 +5,9 @@ One-time migration: copy all data from local SQLite to cloud Postgres.
 Reads from data/dutch_news.db (SQLite) and writes to DATABASE_URL (Postgres).
 Safe to run multiple times — skips rows that already exist (matched by primary key).
 
+Uses batch inserts (500 rows/batch) and pre-fetches existing PKs to avoid
+per-row round-trips to the remote database.
+
 Usage:
     python scripts/migrate_to_postgres.py              # full migration
     python scripts/migrate_to_postgres.py --dry-run    # preview without writing
@@ -13,6 +16,7 @@ Usage:
 import argparse
 import os
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -20,12 +24,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from dotenv import load_dotenv
 load_dotenv()
 
+from psycopg2.extras import execute_values
 from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.orm import sessionmaker
 
 from src.models import Base, _migrate_schema
 
 SQLITE_URL = "sqlite:///data/dutch_news.db"
+
+BATCH_SIZE = 500
+
+BOOL_COLUMNS = {
+    "episodes": {"transcript_fetched", "transcript_is_generated"},
+}
 
 TABLES_IN_ORDER = [
     "episodes",
@@ -48,36 +58,68 @@ def fetch_all(engine, table: str) -> list[dict]:
         return [dict(zip(columns, row)) for row in result.fetchall()]
 
 
-def insert_rows(pg_engine, table: str, rows: list[dict], dry_run: bool) -> int:
-    """Insert rows into Postgres, skipping duplicates by primary key."""
+def get_existing_pks(engine, table: str, pk_col: str) -> set:
+    """Fetch all existing primary keys in one query."""
+    with engine.connect() as conn:
+        result = conn.execute(text(f"SELECT {pk_col} FROM {table}"))
+        return {row[0] for row in result.fetchall()}
+
+
+def coerce_booleans(table: str, rows: list[dict]) -> list[dict]:
+    """Convert SQLite integer booleans (0/1) to Python bool for Postgres."""
+    cols = BOOL_COLUMNS.get(table)
+    if not cols:
+        return rows
+    for row in rows:
+        for col in cols:
+            if col in row and row[col] is not None:
+                row[col] = bool(row[col])
+    return rows
+
+
+def insert_batch(conn, table: str, rows: list[dict]):
+    """Insert rows using psycopg2 execute_values for true multi-row INSERT."""
     if not rows:
-        return 0
+        return
+    columns = list(rows[0].keys())
+    col_str = ", ".join(columns)
+
+    raw_conn = conn.connection.dbapi_connection
+    with raw_conn.cursor() as cur:
+        execute_values(
+            cur,
+            f"INSERT INTO {table} ({col_str}) VALUES %s",
+            argslist=[tuple(r[c] for c in columns) for r in rows],
+            page_size=BATCH_SIZE,
+        )
+
+
+def migrate_table(
+    sqlite_engine, pg_engine, table: str, dry_run: bool
+) -> tuple[int, int, int]:
+    """Migrate one table. Returns (sqlite_count, pg_before, inserted)."""
+    sqlite_count = count_rows(sqlite_engine, table)
+    pg_before = count_rows(pg_engine, table)
 
     inspector = inspect(pg_engine)
     pk_cols = inspector.get_pk_constraint(table).get("constrained_columns", [])
+    pk_col = pk_cols[0] if pk_cols else "id"
 
-    inserted = 0
+    existing_pks = get_existing_pks(pg_engine, table, pk_col)
+
+    rows = fetch_all(sqlite_engine, table)
+    new_rows = [r for r in rows if r.get(pk_col) not in existing_pks]
+    new_rows = coerce_booleans(table, new_rows)
+
+    if dry_run or not new_rows:
+        return sqlite_count, pg_before, len(new_rows)
+
     with pg_engine.begin() as conn:
-        for row in rows:
-            if pk_cols:
-                pk_filter = " AND ".join(f"{col} = :{col}" for col in pk_cols)
-                exists = conn.execute(
-                    text(f"SELECT 1 FROM {table} WHERE {pk_filter}"), 
-                    {col: row[col] for col in pk_cols}
-                ).fetchone()
-                if exists:
-                    continue
+        for i in range(0, len(new_rows), BATCH_SIZE):
+            batch = new_rows[i : i + BATCH_SIZE]
+            insert_batch(conn, table, batch)
 
-            if dry_run:
-                inserted += 1
-                continue
-
-            columns = ", ".join(row.keys())
-            placeholders = ", ".join(f":{k}" for k in row.keys())
-            conn.execute(text(f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"), row)
-            inserted += 1
-
-    return inserted
+    return sqlite_count, pg_before, len(new_rows)
 
 
 def reset_sequences(pg_engine, tables: list[str]):
@@ -85,9 +127,14 @@ def reset_sequences(pg_engine, tables: list[str]):
     with pg_engine.begin() as conn:
         for table in tables:
             try:
-                max_id = conn.execute(text(f"SELECT COALESCE(MAX(id), 0) FROM {table}")).scalar()
+                max_id = conn.execute(
+                    text(f"SELECT COALESCE(MAX(id), 0) FROM {table}")
+                ).scalar()
                 seq_name = f"{table}_id_seq"
-                conn.execute(text(f"SELECT setval('{seq_name}', :val, true)"), {"val": max_id})
+                conn.execute(
+                    text(f"SELECT setval('{seq_name}', :val, true)"),
+                    {"val": max_id},
+                )
             except Exception:
                 pass
 
@@ -99,55 +146,62 @@ def main():
 
     pg_url = os.environ.get("DATABASE_URL")
     if not pg_url or not pg_url.startswith("postgresql"):
-        print("❌ DATABASE_URL not set or not a Postgres URL.")
+        print("DATABASE_URL not set or not a Postgres URL.")
         print("   Set it in .env: DATABASE_URL=postgresql://...")
         sys.exit(1)
 
     sqlite_path = Path("data/dutch_news.db")
     if not sqlite_path.exists():
-        print(f"❌ SQLite database not found: {sqlite_path}")
+        print(f"SQLite database not found: {sqlite_path}")
         sys.exit(1)
 
-    print(f"📦 Source: {sqlite_path}")
-    print(f"🐘 Target: Postgres (Neon)")
+    print(f"Source: {sqlite_path}")
+    print(f"Target: Postgres (Neon)")
     if args.dry_run:
-        print("🔍 DRY RUN — no data will be written\n")
+        print("DRY RUN — no data will be written")
     print()
 
     sqlite_engine = create_engine(SQLITE_URL, echo=False)
     pg_engine = create_engine(
-        pg_url, echo=False,
+        pg_url,
+        echo=False,
         connect_args={"sslmode": "require"},
     )
 
     print("Creating Postgres schema...")
     Base.metadata.create_all(pg_engine)
     _migrate_schema(pg_engine)
-    print("✅ Schema ready\n")
+    print("Schema ready\n")
+
+    total_inserted = 0
+    t0 = time.time()
 
     for table in TABLES_IN_ORDER:
-        sqlite_count = count_rows(sqlite_engine, table)
-        pg_count_before = count_rows(pg_engine, table)
+        t_start = time.time()
+        sqlite_count, pg_before, inserted = migrate_table(
+            sqlite_engine, pg_engine, table, dry_run=args.dry_run
+        )
+        elapsed = time.time() - t_start
+        total_inserted += inserted
 
-        rows = fetch_all(sqlite_engine, table)
-        inserted = insert_rows(pg_engine, table, rows, dry_run=args.dry_run)
-
-        pg_count_after = pg_count_before + inserted if args.dry_run else count_rows(pg_engine, table)
-
-        status = "would insert" if args.dry_run else "inserted"
+        pg_after = pg_before + inserted
+        verb = "would insert" if args.dry_run else "inserted"
         print(
-            f"  {table:25s}  SQLite: {sqlite_count:>5}  "
-            f"Postgres before: {pg_count_before:>5}  "
-            f"{status}: {inserted:>5}  "
-            f"Postgres after: {pg_count_after:>5}"
+            f"  {table:25s}  SQLite: {sqlite_count:>6}  "
+            f"PG before: {pg_before:>6}  "
+            f"{verb}: {inserted:>6}  "
+            f"PG after: {pg_after:>6}  "
+            f"({elapsed:.1f}s)"
         )
 
-    if not args.dry_run:
+    if not args.dry_run and total_inserted > 0:
         print("\nResetting Postgres sequences...")
         reset_sequences(pg_engine, TABLES_IN_ORDER)
-        print("✅ Sequences reset")
+        print("Sequences reset")
 
-    print("\n✅ Migration complete!" if not args.dry_run else "\n✅ Dry run complete!")
+    total_time = time.time() - t0
+    label = "Dry run" if args.dry_run else "Migration"
+    print(f"\n{label} complete! ({total_inserted} rows, {total_time:.1f}s)")
 
 
 if __name__ == "__main__":

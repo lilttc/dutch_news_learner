@@ -112,7 +112,7 @@ class VocabularyItem(Base):
     pos = Column(String(20), index=True)  # NOUN, VERB, ADJ, ADV from spaCy
 
     # Enrichment (optional — can be populated later via dictionary/API)
-    translation = Column(String(200))  # English translation
+    translation = Column(Text)  # English translation
     frequency_rank = Column(Integer)  # From Subtlex-NL or similar (lower = more common)
     cefr_level = Column(String(10))  # A1, A2, B1, B2, C1, C2
 
@@ -274,6 +274,7 @@ def _migrate_schema(engine):
         "ALTER TABLE subtitle_segments ADD COLUMN translation_en TEXT",
         "ALTER TABLE episodes ADD COLUMN topics TEXT",
         "ALTER TABLE episodes ADD COLUMN related_articles TEXT",
+        "ALTER TABLE vocabulary_items ALTER COLUMN translation TYPE TEXT" if pg else None,
         f"""CREATE TABLE IF NOT EXISTS user_vocabulary (
             id {pk},
             user_id INTEGER NOT NULL DEFAULT 1,
@@ -287,6 +288,8 @@ def _migrate_schema(engine):
         "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_status ON user_vocabulary(status)",
     ]
     for sql in migrations:
+        if sql is None:
+            continue
         try:
             with engine.begin() as conn:
                 conn.execute(text(sql))
