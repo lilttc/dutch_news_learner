@@ -17,6 +17,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     create_engine,
 )
 from sqlalchemy.ext.declarative import declarative_base
@@ -200,6 +201,30 @@ class UserVocabulary(Base):
 
     def __repr__(self):
         return f"<UserVocabulary(user={self.user_id}, vocab={self.vocabulary_id}, status='{self.status}')>"
+
+
+class UserEpisodeWatch(Base):
+    """
+    User explicitly marked an episode as watched (Streamlit / future API).
+
+    user_id uses the same space as UserVocabulary (1=legacy, anonymous session ids,
+    registered user ids). One row per (user_id, episode_id).
+    """
+
+    __tablename__ = "user_episode_watches"
+    __table_args__ = (
+        UniqueConstraint("user_id", "episode_id", name="uq_user_episode_watch"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    episode_id = Column(Integer, ForeignKey("episodes.id"), nullable=False, index=True)
+    watched_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    episode = relationship("Episode", backref="user_watches")
+
+    def __repr__(self):
+        return f"<UserEpisodeWatch(user={self.user_id}, episode={self.episode_id})>"
 
 
 class EpisodeVocabulary(Base):
@@ -391,6 +416,16 @@ def _migrate_schema(engine):
             """ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_id_seq')""",
             # Vocab export: optional learner sentence per user per word
             _pg_add_column("user_vocabulary", "user_sentence", "TEXT"),
+            # Explicit "mark episode watched" per user (same user_id space as user_vocabulary)
+            f"""CREATE TABLE IF NOT EXISTS user_episode_watches (
+                id {pk},
+                user_id INTEGER NOT NULL,
+                episode_id INTEGER NOT NULL REFERENCES episodes(id),
+                watched_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                CONSTRAINT uq_user_episode_watch UNIQUE (user_id, episode_id)
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_user_id ON user_episode_watches(user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_episode_id ON user_episode_watches(episode_id)",
         ]
     else:
         migrations = [
@@ -429,6 +464,15 @@ def _migrate_schema(engine):
             # SQLite: insert placeholder so next id is 1000000 (AUTOINCREMENT uses max+1)
             "INSERT OR IGNORE INTO users (id, email, password_hash, created_at) VALUES (999999, '__internal_seed_6f__', '', datetime('now'))",
             "ALTER TABLE user_vocabulary ADD COLUMN user_sentence TEXT",
+            f"""CREATE TABLE IF NOT EXISTS user_episode_watches (
+                id {pk},
+                user_id INTEGER NOT NULL,
+                episode_id INTEGER NOT NULL REFERENCES episodes(id),
+                watched_at TIMESTAMP NOT NULL,
+                UNIQUE (user_id, episode_id)
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_user_id ON user_episode_watches(user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_episode_id ON user_episode_watches(episode_id)",
         ]
 
     for sql in migrations:

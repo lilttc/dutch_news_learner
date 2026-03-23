@@ -302,7 +302,7 @@ High value for active learners: personal sentence/notes per word, then browse an
 - [x] **Preview** — First 10 rows shown before download
 - [ ] **Bulk scope** — Row checkboxes + “export selection only” (follow-up)
 - [ ] **Saved presets (later)** — Named column sets, e.g. “Minimal Anki” vs “Full sheet”
-- [ ] **Episode watch state** — Persist watched/unwatched (or progress) per user + episode; then filter “My vocabulary” / export by watch state
+- [x] **Episode watch state** — `user_episode_watches` table; Streamlit **Mark episode as watched / not watched**; **My vocabulary** + `GET /vocabulary/export` filter `episode_watch=any|watched_only|unwatched_only`
 
 #### Remaining — Next.js (defer after Streamlit)
 - [ ] **Episode vocabulary tab** — Note field + save via `PATCH .../note` (reuse API)

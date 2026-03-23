@@ -14,6 +14,7 @@ from src.vocab_export import (
     build_anki_row,
     build_export_rows,
     export_rows_to_csv,
+    parse_episode_watch_param,
     parse_export_columns,
     parse_statuses_export,
     project_export_columns,
@@ -33,6 +34,13 @@ USER_SENTENCE_MAX_LEN = 2000
 def _parse_export_columns_api(raw: str | None) -> list[str]:
     try:
         return parse_export_columns(raw)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+def _parse_episode_watch_api(raw: str | None) -> str:
+    try:
+        return parse_episode_watch_param(raw)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -128,6 +136,13 @@ def export_vocabulary(
             "(calendar day, UTC)."
         ),
     ),
+    episode_watch: str = Query(
+        "any",
+        description=(
+            "any | watched_only | unwatched_only — filter by episodes you marked watched "
+            "(same user_id as vocab; explicit toggle, not auto-playback)."
+        ),
+    ),
     export_format: Literal["csv", "json"] = Query(
         "csv",
         alias="format",
@@ -162,6 +177,8 @@ def export_vocabulary(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
+    ew = _parse_episode_watch_api(episode_watch)
+
     full_rows = build_export_rows(
         db,
         dictionary,
@@ -170,6 +187,7 @@ def export_vocabulary(
         has_note,
         episode_date_from=episode_from,
         episode_date_to=episode_to,
+        episode_watch=ew,
     )
 
     if export_format == "json":

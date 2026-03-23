@@ -13,7 +13,13 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from src.dictionary.lookup import DictionaryLookup
-from src.models import Episode, EpisodeVocabulary, UserVocabulary, VocabularyItem
+from src.models import (
+    Episode,
+    EpisodeVocabulary,
+    UserEpisodeWatch,
+    UserVocabulary,
+    VocabularyItem,
+)
 
 EXPORT_COLUMN_KEYS = frozenset({
     "vocabulary_id",
@@ -90,6 +96,27 @@ POS_HINTS: dict[str, str] = {
 
 EXPORT_VALID_STATUSES = frozenset({"new", "learning", "known"})
 
+# Filter vocabulary by whether it appears in episodes the user marked watched (explicit toggle)
+EPISODE_WATCH_ANY = "any"
+EPISODE_WATCH_WATCHED_ONLY = "watched_only"
+EPISODE_WATCH_UNWATCHED_ONLY = "unwatched_only"
+EXPORT_VALID_EPISODE_WATCH = frozenset(
+    {EPISODE_WATCH_ANY, EPISODE_WATCH_WATCHED_ONLY, EPISODE_WATCH_UNWATCHED_ONLY}
+)
+
+
+def parse_episode_watch_param(raw: str | None) -> str:
+    """Normalize API query; raises ValueError if invalid."""
+    s = (raw or EPISODE_WATCH_ANY).strip().lower()
+    if s in ("", "all"):
+        s = EPISODE_WATCH_ANY
+    if s not in EXPORT_VALID_EPISODE_WATCH:
+        raise ValueError(
+            f"Invalid episode_watch: {raw!r}. "
+            f"Use: {', '.join(sorted(EXPORT_VALID_EPISODE_WATCH))}"
+        )
+    return s
+
 
 def format_pos_for_display(pos: str | None) -> str | None:
     """Human-friendly POS for tables (e.g. NOUN → noun)."""
@@ -136,6 +163,40 @@ def _vocabulary_ids_in_episode_date_range(
     if date_to is not None:
         q = q.filter(func.date(Episode.published_at) <= date_to)
     return {r[0] for r in q.distinct().all()}
+
+
+def _vocabulary_ids_for_episode_watch_filter(
+    db: Session, user_id: int, mode: str
+) -> set[int] | None:
+    """
+    None = no watch filter.
+    watched_only: word appears in at least one episode user marked watched.
+    unwatched_only: word appears in at least one episode user has not marked watched.
+    """
+    if mode == EPISODE_WATCH_ANY:
+        return None
+    if mode == EPISODE_WATCH_WATCHED_ONLY:
+        q = (
+            db.query(EpisodeVocabulary.vocabulary_id)
+            .join(
+                UserEpisodeWatch,
+                (UserEpisodeWatch.episode_id == EpisodeVocabulary.episode_id)
+                & (UserEpisodeWatch.user_id == user_id),
+            )
+        )
+        return {r[0] for r in q.distinct().all()}
+    if mode == EPISODE_WATCH_UNWATCHED_ONLY:
+        watched_rows = (
+            db.query(UserEpisodeWatch.episode_id)
+            .filter(UserEpisodeWatch.user_id == user_id)
+            .all()
+        )
+        watched_ids = [r[0] for r in watched_rows]
+        q = db.query(EpisodeVocabulary.vocabulary_id)
+        if watched_ids:
+            q = q.filter(~EpisodeVocabulary.episode_id.in_(watched_ids))
+        return {r[0] for r in q.distinct().all()}
+    return None
 
 
 def parse_export_columns(raw: str | None) -> list[str]:
@@ -210,25 +271,38 @@ def build_export_rows(
     *,
     episode_date_from: date | None = None,
     episode_date_to: date | None = None,
+    episode_watch: str = EPISODE_WATCH_ANY,
 ) -> list[dict[str, Any]]:
     """
     statuses: None = all statuses; else filter to these (new / learning / known).
     has_note: True / False / None (no filter).
     episode_date_from / episode_date_to: only words that appear in at least one episode
     whose published_at date falls in the range (inclusive). Example column uses the same window.
+    episode_watch: any | watched_only | unwatched_only (see _vocabulary_ids_for_episode_watch_filter).
     """
     q = (
         db.query(UserVocabulary, VocabularyItem)
         .join(VocabularyItem, UserVocabulary.vocabulary_id == VocabularyItem.id)
         .filter(UserVocabulary.user_id == user_id)
     )
+    vocab_sets: list[set[int]] = []
     vids_by_date = _vocabulary_ids_in_episode_date_range(
         db, episode_date_from, episode_date_to
     )
     if vids_by_date is not None:
-        if not vids_by_date:
+        vocab_sets.append(vids_by_date)
+    vids_by_watch = _vocabulary_ids_for_episode_watch_filter(
+        db, user_id, episode_watch
+    )
+    if vids_by_watch is not None:
+        vocab_sets.append(vids_by_watch)
+    if vocab_sets:
+        combined = vocab_sets[0]
+        for s in vocab_sets[1:]:
+            combined = combined & s
+        if not combined:
             return []
-        q = q.filter(VocabularyItem.id.in_(vids_by_date))
+        q = q.filter(VocabularyItem.id.in_(combined))
 
     if statuses is not None:
         if not statuses:

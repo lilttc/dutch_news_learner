@@ -43,6 +43,7 @@ from src.models import (
     EpisodeVocabulary,
     SubtitleSegment,
     User,
+    UserEpisodeWatch,
     UserVocabulary,
     VocabularyItem,
     get_engine,
@@ -50,31 +51,46 @@ from src.models import (
 )
 
 
-def _streamlit_build_export_rows(session, lookup, user_id, statuses_arg, has_note, d_from, d_to):
+def _streamlit_build_export_rows(
+    session,
+    lookup,
+    user_id,
+    statuses_arg,
+    has_note,
+    d_from,
+    d_to,
+    episode_watch: str = "any",
+):
     """
-    Call build_export_rows with optional episode date filter.
+    Call build_export_rows with optional episode date + watch filters.
 
-    Older checkouts may lack episode_date_from / episode_date_to on build_export_rows;
-    avoid crashing and warn if the user enabled date filtering.
+    Tolerates older src/vocab_export.py missing keyword-only params.
     """
     sig = inspect.signature(build_export_rows)
+    kwargs: dict = {}
     if "episode_date_from" in sig.parameters:
-        return build_export_rows(
-            session,
-            lookup,
-            user_id,
-            statuses_arg,
-            has_note,
-            episode_date_from=d_from,
-            episode_date_to=d_to,
-        )
-    if d_from is not None or d_to is not None:
+        kwargs["episode_date_from"] = d_from
+        kwargs["episode_date_to"] = d_to
+    elif d_from is not None or d_to is not None:
         st.warning(
             "Your **src/vocab_export.py** is missing the episode date parameters on "
             "`build_export_rows`. Pull the latest repo (or re-save that file). "
             "Running **without** the episode date filter for now."
         )
-    return build_export_rows(session, lookup, user_id, statuses_arg, has_note)
+
+    if "episode_watch" in sig.parameters:
+        kwargs["episode_watch"] = episode_watch
+    elif episode_watch != "any":
+        st.warning(
+            "Your **src/vocab_export.py** is missing `episode_watch` on `build_export_rows`. "
+            "Episode watch filter ignored — pull the latest repo."
+        )
+
+    if not kwargs:
+        return build_export_rows(session, lookup, user_id, statuses_arg, has_note)
+    return build_export_rows(
+        session, lookup, user_id, statuses_arg, has_note, **kwargs
+    )
 
 
 def _streamlit_export_rows_to_csv(fieldnames, rows, *, header_aliases=None):
@@ -247,6 +263,50 @@ def _persist_vocab_note_save(
     db = get_db_session()
     try:
         set_vocab_user_sentence(db, vocabulary_id, text, user_id)
+    finally:
+        db.close()
+
+
+def is_episode_watched(session, user_id: int, episode_id: int) -> bool:
+    """True if this user explicitly marked the episode as watched."""
+    return (
+        session.query(UserEpisodeWatch)
+        .filter_by(user_id=user_id, episode_id=episode_id)
+        .first()
+        is not None
+    )
+
+
+def set_episode_watched(session, user_id: int, episode_id: int) -> None:
+    if is_episode_watched(session, user_id, episode_id):
+        return
+    session.add(UserEpisodeWatch(user_id=user_id, episode_id=episode_id))
+    session.commit()
+
+
+def clear_episode_watched(session, user_id: int, episode_id: int) -> None:
+    row = (
+        session.query(UserEpisodeWatch)
+        .filter_by(user_id=user_id, episode_id=episode_id)
+        .first()
+    )
+    if row:
+        session.delete(row)
+        session.commit()
+
+
+def _persist_episode_watched_set(episode_id: int, user_id: int) -> None:
+    db = get_db_session()
+    try:
+        set_episode_watched(db, user_id, episode_id)
+    finally:
+        db.close()
+
+
+def _persist_episode_watched_clear(episode_id: int, user_id: int) -> None:
+    db = get_db_session()
+    try:
+        clear_episode_watched(db, user_id, episode_id)
     finally:
         db.close()
 
@@ -1242,12 +1302,20 @@ def _render_my_vocabulary_page(session, user_id: int) -> None:
         elif hasattr(dr, "year"):
             d_from = d_to = dr
 
-    with st.expander("Watched / unwatched episodes"):
-        st.markdown(
-            "**Not available yet.** The app doesn’t store which episodes you’ve opened or finished, "
-            "so we can’t filter vocabulary by watch state. A future version could save that per account "
-            "or session and add a filter here."
-        )
+    episode_watch_sel = st.selectbox(
+        "Episodes you marked watched",
+        options=["any", "watched_only", "unwatched_only"],
+        format_func=lambda x: {
+            "any": "Any episode",
+            "watched_only": "Only words from watched episodes",
+            "unwatched_only": "Only words from not-watched episodes",
+        }[x],
+        key="mv_episode_watch",
+        help=(
+            "You mark episodes on the episode page (**Mark episode as watched**). "
+            "A word can appear in several episodes; it’s included if **any** matching episode fits the filter."
+        ),
+    )
 
     lookup = get_lookup()
     rows = _streamlit_build_export_rows(
@@ -1258,6 +1326,7 @@ def _render_my_vocabulary_page(session, user_id: int) -> None:
         has_note,
         d_from,
         d_to,
+        episode_watch_sel,
     )
 
     search = (st.session_state.get("mv_search") or "").strip().lower()
@@ -1441,6 +1510,29 @@ def main():
         st.title(episode.title)
         if episode.published_at:
             st.caption(episode.published_at.strftime("%A, %B %d, %Y"))
+
+        ep_watched = is_episode_watched(session, user_id, selected_id)
+        if ep_watched:
+            st.caption("✓ You marked this episode as **watched**.")
+        w1, w2 = st.columns(2)
+        with w1:
+            st.button(
+                "Mark episode as watched",
+                key=f"ep_watch_set_{selected_id}",
+                disabled=ep_watched,
+                use_container_width=True,
+                on_click=_persist_episode_watched_set,
+                args=(selected_id, user_id),
+            )
+        with w2:
+            st.button(
+                "Mark as not watched",
+                key=f"ep_watch_clear_{selected_id}",
+                disabled=not ep_watched,
+                use_container_width=True,
+                on_click=_persist_episode_watched_clear,
+                args=(selected_id, user_id),
+            )
 
         # --- Video (always visible) ---
         render_video(episode.video_id)
