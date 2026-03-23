@@ -129,6 +129,26 @@ class VocabularyItem(Base):
         return f"<VocabularyItem(lemma='{self.lemma}', pos='{self.pos}')>"
 
 
+class User(Base):
+    """
+    Registered user (Phase 6F — email auth).
+
+    id >= 1_000_000 to avoid collision with AnonymousSession (id 2+) and
+    legacy (user_id=1). UserVocabulary.user_id can be: 1=legacy,
+    2..999999=anonymous session, 1000000+=registered user.
+    """
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<User(id={self.id}, email='{self.email}')>"
+
+
 class AnonymousSession(Base):
     """
     Anonymous session for per-user vocabulary (Phase 6E).
@@ -355,6 +375,17 @@ def _migrate_schema(engine):
                 pg_get_serial_sequence('anonymous_sessions', 'id'),
                 GREATEST(1, (SELECT COALESCE(MAX(id), 1) FROM anonymous_sessions))
             )""",
+            # Phase 6F: users table for email auth (id >= 1000000 to avoid collision)
+            f"""CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                password_hash VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_users_email ON users(email)",
+            # Postgres: create sequence starting at 1000000 for users
+            """CREATE SEQUENCE IF NOT EXISTS users_id_seq START 1000000""",
+            """ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_id_seq')""",
         ]
     else:
         migrations = [
@@ -382,6 +413,16 @@ def _migrate_schema(engine):
             "CREATE INDEX IF NOT EXISTS ix_anonymous_sessions_token ON anonymous_sessions(token)",
             # Reserve id=1 for legacy; real sessions get id=2+ (SQLite: OR IGNORE)
             "INSERT OR IGNORE INTO anonymous_sessions (id, token, created_at) VALUES (1, '__legacy__', datetime('now'))",
+            # Phase 6F: users table (SQLite: no sequence; first insert uses 1000000)
+            """CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                password_hash VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_users_email ON users(email)",
+            # SQLite: insert placeholder so next id is 1000000 (AUTOINCREMENT uses max+1)
+            "INSERT OR IGNORE INTO users (id, email, password_hash, created_at) VALUES (999999, '__internal_seed_6f__', '', datetime('now'))",
         ]
 
     for sql in migrations:

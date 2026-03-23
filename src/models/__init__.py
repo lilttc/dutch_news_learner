@@ -6,6 +6,7 @@ from .db import (
     Episode,
     EpisodeVocabulary,
     SubtitleSegment,
+    User,
     UserVocabulary,
     VocabularyItem,
     _migrate_schema,
@@ -17,6 +18,7 @@ from .db import (
 __all__ = [
     "AnonymousSession",
     "Base",
+    "User",
     "Episode",
     "EpisodeVocabulary",
     "SubtitleSegment",

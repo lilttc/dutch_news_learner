@@ -1,6 +1,6 @@
 # Dutch News Learner TODO
 
-**Last Updated:** 2026-03-19
+**Last Updated:** 2026-03-20
 
 ---
 
@@ -114,6 +114,100 @@ Pipeline runs in CI via GitHub Actions. See `docs/GITHUB_ACTIONS_SETUP.md` for d
 - [ ] **Store secrets in GitHub** — `DATABASE_URL`, `YOUTUBE_API_KEY`, `OPENAI_API_KEY` (user action)
 - [ ] **Test** — trigger workflow manually, verify new episode in app (user action)
 
+### Per-User Vocabulary — Option A (Quick Fix) ✅ DONE
+Implemented localStorage for Next.js so each visitor has their own known/learning status on their device.
+
+- [x] **Next.js: localStorage** — Status stored in browser (`dutch_news_vocab_status`). No API calls for status. User-facing note: "Status saved in this browser — yours alone."
+- [x] **Streamlit: stays shared** — Python/server-side cannot access localStorage. Added caption directing users to Next.js for per-device storage. Streamlit Cloud remains shared (user_id=1).
+- [ ] **Reddit responses** — User action: post draft replies from `docs/REDDIT_RESPONSE_GUIDE.md`
+
+### Per-User Vocabulary — Phase 6E ✅ DONE, Phase 6F Next
+Phase 6E (anonymous sessions) implemented. Preferred UX: Phase 6F (email auth) — no need to explain sessions to users.
+
+- [x] **Phase 6E: Anonymous sessions** — Token in localStorage (Next.js) or URL `?u=<token>` (Streamlit). API `X-Session-Token`, maps to user_id. UserVocabulary per-session.
+- [ ] **Phase 6F: Email auth** — Sign up with email; progress saved everywhere. See Phase 6F section below. Branch: `feat/phase-6f-email-auth`.
+
+### Reddit Feedback — Bugs to Fix (This Week)
+
+Posted on r/learndutch; received positive feedback + concrete bug reports. See `docs/REDDIT_RESPONSE_GUIDE.md` for response drafts.
+
+- [x] **Related reading: missing spaces** (Aandeelhouder) — Fixed in `fix_concatenated_spaces()` (Streamlit + Next.js).
+- [ ] **Vocabulary status buttons: page freeze** (Aandeelhouder) — Clicking learning/known causes UI to freeze. Deferred to tomorrow. Caused by `st.rerun()` after each status change; optimize (e.g. batch updates, loading state, or defer full rerun).
+- [ ] **Mobile/Android: empty page** (Humoer) — Streamlit shows empty page on Android browsers. Investigate Streamlit mobile compatibility; consider fallback message or PWA.
+- [x] **Filter UX: radio button** (anyalitica) — Replaced checkbox with radio: "Hide known" | "Show all" (Streamlit + Next.js).
+
+### Product Ideas (Reddit + Suggestions) — Prioritization
+
+| Idea | Status | Short-run (This Week) | Long-run |
+|------|--------|----------------------|----------|
+| Save words to personal review list | ✅ Exists | — | Enhance: dedicated "Review" view, better surfacing |
+| Mark episode as done + streak/history | New | — | Add `EpisodeProgress` / streak tracking |
+| Mini summary: 1-sentence NL + EN | New | — | LLM: episode summary (Dutch + English); display in header |
+| Difficulty labels (episode/sentence) | New | — | CEFR or frequency-based; integrate Subtlex-NL later |
+| "Listen first, reveal later" mode | New | — | Hide transcript by default; reveal on click/toggle |
+| Daily review from yesterday's words | Partial | Polish quiz to emphasize yesterday's saved words | — |
+| Known words storage (per-user) | 6E done | Next.js + Streamlit: anonymous sessions | Phase 6F: email auth (preferred UX) |
+
+**Short-run focus (today–this week):**
+1. ~~Fix related reading spaces bug~~ ✅ Done
+2. ~~Radio button for hide/show known words~~ ✅ Done
+3. ~~Per-user vocab: Option A (localStorage for Next.js)~~ ✅ Done
+4. Respond to Reddit comments (user action)
+5. Fix vocabulary status freeze (deferred to tomorrow)
+
+**Long-run roadmap adjustments:**
+- Add **Episode progress + streak** to backlog (high impact, medium effort)
+- Add **Listen first mode** to backlog (high impact, small effort)
+- Add **Mini summary** to backlog (medium impact, medium effort — LLM)
+- **Mobile UX** moved up: Streamlit polish for mobile, or document limitations
+
+### Phase 6E: Anonymous Sessions ✅ DONE
+Upgrade path from Option A (localStorage). Gives per-user vocab with persistence across visits, no login.
+Implemented — token in localStorage (Next.js) or URL param (Streamlit). UserVocabulary uses per-session user_id.
+
+### Phase 6F: Email Auth (Per-User Vocabulary — Preferred UX)
+
+**Why:** Users shouldn't need to understand sessions (URL tokens, bookmarking, localStorage). Email signup gives a simple story: "Create account → your progress is saved everywhere." No explaining where data lives.
+
+**Branch:** `feat/phase-6f-email-auth` (create after merging `feat/phase-6e-anonymous-sessions`)
+
+#### Commit 1: Database + models
+- [ ] Add `User` table: `id`, `email` (unique, indexed), `password_hash`, `created_at`
+- [ ] Add migration: `users` table, `UserVocabulary.user_id` FK to `users.id` (or keep linking via new `user_id` column; `users.id` becomes the user_id for UserVocabulary)
+- [ ] Reserve `user_id=1` for legacy/anonymous; `user_id=2+` = registered users. `AnonymousSession` ids can stay separate — migration: when user signs up, copy `AnonymousSession`/legacy UserVocabulary rows to the new `User`'s id, then optionally delete anonymous rows
+- [ ] Export `User` from `src.models`
+
+#### Commit 2: Auth backend (FastAPI)
+- [ ] Choose auth lib: **FastAPI Users** (https://fastapi-users.github.io) or **Authlib** + JWT, or hand-roll with `passlib` + `python-jose`
+- [ ] `POST /api/auth/register` — email + password; hash with bcrypt/argon2; create User; return session token or set cookie
+- [ ] `POST /api/auth/login` — email + password; verify; return JWT or set HTTP-only cookie
+- [ ] `POST /api/auth/logout` — clear session
+- [ ] `GET /api/auth/me` — return current user (email, id) if authenticated
+- [ ] Auth dependency: `get_current_user(request) -> User | None`; protect vocab/episode routes — if authenticated, use `user.id`; else fall back to `X-Session-Token` (anonymous) or `user_id=1` (legacy)
+- [ ] Add `SECRET_KEY`, `JWT_ALGORITHM` (or similar) to env
+
+#### Commit 3: Next.js auth UI
+- [ ] Auth context: `useAuth()` — `user`, `login`, `register`, `logout`, `loading`
+- [ ] Login page: `/login` — email + password form, call `POST /api/auth/login`
+- [ ] Register page: `/register` — email + password, call `POST /api/auth/register`
+- [ ] Header: show "Log in" / "Sign up" when anonymous; show "Log out" + email when authenticated
+- [ ] Persist session: JWT in `localStorage` or HTTP-only cookie (cookie is more secure; requires API to set it)
+- [ ] Send `Authorization: Bearer <token>` on API requests when logged in; backend prefers Bearer over `X-Session-Token`
+- [ ] Migrate anonymous progress: on first login after using app anonymously, offer "Merge your progress?" — call API to copy `AnonymousSession` UserVocabulary to `User` id
+
+#### Commit 4: Streamlit auth (optional)
+- [ ] Streamlit has no native auth; options: (a) **Streamlit-Authenticator** (`pip install streamlit-authenticator`), (b) embed login in iframe and pass token via query param, (c) client-side only for Next.js; Streamlit stays anonymous with URL token
+- [ ] If supporting Streamlit auth: add login form in sidebar; store JWT in `st.session_state`; send token to API if Streamlit ever calls API directly, or keep Streamlit server-side DB access and use `User` id from session
+
+#### Migration path (anonymous → registered)
+- [ ] When user registers: optionally pass `anonymous_token` (or `X-Session-Token`) in request; backend copies `UserVocabulary` rows from anonymous user_id to new User id; delete or leave anonymous rows
+- [ ] Document in README: "Sign up to save progress across devices"
+
+#### Security notes
+- [ ] Password: min 8 chars; use bcrypt or argon2
+- [ ] Rate-limit login/register (e.g. 5 attempts/min per IP)
+- [ ] Email verification (optional for MVP): send link to verify; mark `User.email_verified`
+
 ### Phase 6D: VPN Integration for Transcript Fetch (Geo-Restriction)
 GitHub Actions runners are typically in the US; NOS transcripts may be geo-restricted.
 Integrate NordVPN in the workflow so ingest runs from a Netherlands IP.
@@ -173,9 +267,16 @@ Merge to main when polished.
 **Platform:**
 - [ ] Clickable calendar view for episode selection by date
 - [ ] Streamlit polish: welcome message, episode count, mobile UX
-- [ ] User system: auth, per-user vocabulary tracking
+- [ ] User system: email auth, per-user vocabulary (Phase 6F)
+- [ ] Phase 6E: Anonymous sessions (per-user vocab without auth; upgrade from localStorage)
 - [ ] Hosting upgrade: promote Next.js to primary, retire Streamlit
 - [ ] Analytics: Vercel Analytics, PostHog, learning event tracking
+
+**Reddit / Product Ideas (new):**
+- [ ] Episode progress: mark as done, streak counter, watch history
+- [ ] Mini summary: one-sentence Dutch + English per episode (LLM)
+- [ ] "Listen first, reveal later" mode — hide transcript by default
+- [ ] Difficulty labels per episode (CEFR or frequency-based)
 
 ---
 
@@ -195,6 +296,9 @@ Merge to main when polished.
 | ~~Missing translations for inflected forms~~ | Critical | Medium | ✅ Done (LLM enrichment) |
 | ~~Separable verb detection (aanvallen, opbellen)~~ | Critical | Medium | ✅ Done (SeparableVerbRecombiner) |
 | ~~Video-subtitle sync (click timestamp → seek video)~~ | High | Medium | ✅ Done (postMessage API) |
+| Related reading: fix missing spaces in snippets | High | Small | Reddit bug |
+| Vocabulary status: fix freeze on click | High | Medium | Reddit bug |
+| Mobile/Android: empty page | Medium | TBD | Reddit bug |
 | Transcript auto-scroll with video playback | High | High | |
 | Episode progress indicator ("12 new words") | High | Small | |
 | Pronunciation audio (Forvo / Web Speech API) | Medium | Small | |
@@ -370,3 +474,14 @@ python scripts/convert_dictionary_to_sqlite.py
 - **Phase 6B: GitHub Actions**
   - `.github/workflows/daily_pipeline.yml` — scheduled + manual trigger
   - run_pipeline.sh: OPENAI_API_KEY from env or .env (CI-friendly)
+
+### Mar 23, 2026
+- **Reddit r/learndutch** — Posted for feedback, ~12h ago
+  - Positive reception (Dank je wel, "geweldige tool", "exactly what I was looking for")
+  - Bug reports: Related reading missing spaces; vocabulary status buttons cause freeze; Android empty page
+  - UX suggestion: radio button for hide/show known words
+  - Question: known words storage (currently shared, no auth)
+- **Product ideas** — Mapped to TODO: episode done + streak, mini summary, listen-first mode, difficulty labels
+- **Prioritization** — Short-run: fix bugs, respond to Reddit; long-run: episode streak, listen-first, mini summary
+- **fix/reddit-feedback branch** — Related reading spaces fix, radio button filter
+- **Per-user vocab (Option A)** — localStorage for Next.js (per-device); Streamlit stays shared with caption. Future: Phase 6E anonymous sessions.
