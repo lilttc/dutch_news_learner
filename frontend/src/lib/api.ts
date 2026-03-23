@@ -1,38 +1,54 @@
 /**
  * API client for the Dutch News Learner FastAPI backend.
  *
- * Anonymous sessions (Phase 6E): token stored in localStorage, sent via
- * X-Session-Token header. GET /api/session creates/returns session.
+ * Auth (Phase 6F): Bearer token (registered) > X-Session-Token (anonymous).
+ * JWT in localStorage (dutch_news_auth), session token (dutch_news_session).
  */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const AUTH_TOKEN_KEY = "dutch_news_auth";
 const SESSION_KEY = "dutch_news_session";
 
-let _tokenPromise: Promise<string> | null = null;
+let _sessionPromise: Promise<string> | null = null;
 
-/** Get or create session token. On client: fetches from API if missing. On server: returns "". */
+/** JWT for registered users. Client only. */
+function getAuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+/** Session token for anonymous users. Client only. */
 async function getSessionToken(): Promise<string> {
   if (typeof window === "undefined") return "";
   const stored = localStorage.getItem(SESSION_KEY);
   if (stored) return stored;
-  if (!_tokenPromise) {
-    _tokenPromise = fetch(`${API_BASE}/api/session`)
+  if (!_sessionPromise) {
+    _sessionPromise = fetch(`${API_BASE}/api/session`)
       .then((r) => r.json())
       .then((d: { token: string }) => {
         localStorage.setItem(SESSION_KEY, d.token);
         return d.token;
       });
   }
-  return _tokenPromise;
+  return _sessionPromise;
+}
+
+/** Token for API: prefer Bearer (JWT), else X-Session-Token. */
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const jwt = getAuthToken();
+  if (jwt) return { Authorization: `Bearer ${jwt}` };
+  const session = await getSessionToken();
+  if (session) return { "X-Session-Token": session };
+  return {};
 }
 
 async function fetchWithAuth<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const token = await getSessionToken();
+  const authHeaders = await getAuthHeaders();
   const headers = new Headers(options?.headers);
-  if (token) headers.set("X-Session-Token", token);
+  Object.entries(authHeaders).forEach(([k, v]) => headers.set(k, v));
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
@@ -106,9 +122,11 @@ export async function updateVocabStatus(
   vocabularyId: number,
   status: string
 ): Promise<void> {
-  const token = await getSessionToken();
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers["X-Session-Token"] = token;
+  const authHeaders = await getAuthHeaders();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...authHeaders,
+  };
   const res = await fetch(
     `${API_BASE}/api/vocabulary/${vocabularyId}/status`,
     {
