@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from src.models import UserVocabulary, VocabularyItem
 
 from ..deps import get_db
+from ..session import get_user_id
 
 router = APIRouter(tags=["vocabulary"])
 
@@ -29,9 +30,14 @@ class VocabStatusOut(BaseModel):
 def list_vocab_statuses(
     status: str | None = None,
     db: Session = Depends(get_db),
-    user_id: int = 1,
+    user_id: int = Depends(get_user_id),
 ):
-    """List all vocabulary items with their user status."""
+    """
+    List all vocabulary items with their user status.
+
+    User is resolved from X-Session-Token header (or token query param).
+    Without token, returns legacy shared user (user_id=1).
+    """
     query = (
         db.query(UserVocabulary, VocabularyItem)
         .join(VocabularyItem, UserVocabulary.vocabulary_id == VocabularyItem.id)
@@ -55,9 +61,14 @@ def update_vocab_status(
     vocabulary_id: int,
     body: VocabStatusUpdate,
     db: Session = Depends(get_db),
-    user_id: int = 1,
+    user_id: int = Depends(get_user_id),
 ):
-    """Set a word's learning status (new, learning, known)."""
+    """
+    Set a word's learning status (new, learning, known).
+
+    User is resolved from X-Session-Token header (or token query param).
+    Without token, uses legacy shared user (user_id=1).
+    """
     if body.status not in VALID_STATUSES:
         raise HTTPException(
             status_code=400,

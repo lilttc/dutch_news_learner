@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 from src.models import Episode, EpisodeVocabulary, UserVocabulary
 
 from ..deps import get_db, get_dictionary
+from ..session import get_user_id
 
 router = APIRouter(tags=["episodes"])
 
@@ -117,8 +118,14 @@ def get_episode(
     episode_id: int,
     db: Session = Depends(get_db),
     dictionary=Depends(get_dictionary),
+    user_id: int = Depends(get_user_id),
 ):
-    """Get full episode detail: segments, vocabulary with dictionary data, articles."""
+    """
+    Get full episode detail: segments, vocabulary with dictionary data, articles.
+
+    Vocabulary status is per-user, resolved from X-Session-Token header.
+    Without token, uses legacy shared user (user_id=1).
+    """
     episode = (
         db.query(Episode)
         .options(
@@ -146,10 +153,10 @@ def get_episode(
         for s in segments
     ]
 
-    # Vocabulary with dictionary enrichment + user status
+    # Vocabulary with dictionary enrichment + user status (per-user via token)
     user_statuses = {
         uv.vocabulary_id: uv.status
-        for uv in db.query(UserVocabulary).filter_by(user_id=1).all()
+        for uv in db.query(UserVocabulary).filter_by(user_id=user_id).all()
     }
 
     vocab_out = []
