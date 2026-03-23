@@ -24,7 +24,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 import streamlit as st
 from sqlalchemy.orm import joinedload
 
-from src.api.auth import verify_password
+from src.api.auth import hash_password, verify_password
 from src.api.session import get_or_create_session
 from src.dictionary import get_lookup
 from src.models import (
@@ -504,7 +504,7 @@ def _get_episode_vocab_data(episode_id: int):
         if not episode:
             return []
         vocab_list = _filter_vocab(episode.episode_vocabulary or [])
-        return [
+        rows = [
             {
                 "vocabulary_id": ev.vocabulary_item.id,
                 "lemma": ev.vocabulary_item.lemma,
@@ -517,109 +517,119 @@ def _get_episode_vocab_data(episode_id: int):
             }
             for ev in vocab_list
         ]
+        # One row per vocabulary_id (avoid duplicate UI if data has dupes)
+        seen: set[int] = set()
+        out = []
+        for row in rows:
+            vid = row["vocabulary_id"]
+            if vid in seen:
+                continue
+            seen.add(vid)
+            out.append(row)
+        return out
     finally:
         session.close()
 
 
-@st.fragment
 def _render_vocabulary_fragment(episode_id):
     """
-    Fragment: vocabulary list with status buttons. Reruns only this block when
-    a status button is clicked, avoiding full-app freeze.
+    Vocabulary list with status buttons.
+
+    Not using @st.fragment: widgets inside st.tabs() + fragment can duplicate
+    button rows (Streamlit parent container outside fragment). Full rerun on
+    click is acceptable for this block.
     """
     if not episode_id:
         return
-    with st.spinner("Updating…"):
-        vocab_data = _get_episode_vocab_data(episode_id)
-        if not vocab_data:
-            return
+    vocab_data = _get_episode_vocab_data(episode_id)
+    if not vocab_data:
+        return
 
-        session = get_db_session()
-        try:
-            user_id = st.session_state.get("user_id", 1)
-            statuses = load_user_vocab_statuses(session, user_id)
-            search_query = st.session_state.get("vocab_search", "").strip()
-            sort_by = st.session_state.get("vocab_sort", "frequency")
-            known_filter = st.session_state.get("vocab_known_filter", "hide")
-            hide_known = known_filter == "hide"
-            show_all = st.session_state.get("vocab_show_all", False)
+    session = get_db_session()
+    try:
+        user_id = st.session_state.get("user_id", 1)
+        statuses = load_user_vocab_statuses(session, user_id)
+        search_query = st.session_state.get("vocab_search", "").strip()
+        sort_by = st.session_state.get("vocab_sort", "frequency")
+        known_filter = st.session_state.get("vocab_known_filter", "hide")
+        hide_known = known_filter == "hide"
+        show_all = st.session_state.get("vocab_show_all", False)
 
-            if hide_known:
-                vocab_data = [
-                    v for v in vocab_data
-                    if statuses.get(v["vocabulary_id"], "new") != "known"
-                ]
-            if search_query:
-                q = search_query.lower()
-                vocab_data = [v for v in vocab_data if q in v["lemma"].lower()]
-            if sort_by == "alpha":
-                vocab_data = sorted(vocab_data, key=lambda v: v["lemma"].lower())
-            else:
-                vocab_data = sorted(
-                    vocab_data,
-                    key=lambda v: v["occurrence_count"],
-                    reverse=True,
-                )
+        if hide_known:
+            vocab_data = [
+                v for v in vocab_data
+                if statuses.get(v["vocabulary_id"], "new") != "known"
+            ]
+        if search_query:
+            q = search_query.lower()
+            vocab_data = [v for v in vocab_data if q in v["lemma"].lower()]
+        if sort_by == "alpha":
+            vocab_data = sorted(vocab_data, key=lambda v: v["lemma"].lower())
+        else:
+            vocab_data = sorted(
+                vocab_data,
+                key=lambda v: v["occurrence_count"],
+                reverse=True,
+            )
 
-            total = len(vocab_data)
-            is_searching = bool(search_query)
-            display_vocab = vocab_data if (show_all or is_searching) else vocab_data[:DEFAULT_VOCAB_LIMIT]
+        total = len(vocab_data)
+        is_searching = bool(search_query)
+        display_vocab = vocab_data if (show_all or is_searching) else vocab_data[:DEFAULT_VOCAB_LIMIT]
 
-            lookup = get_lookup()
-            for v in display_vocab:
-                vid = v["vocabulary_id"]
-                count = v["occurrence_count"]
-                current_status = statuses.get(vid, "new")
-                status_icon = STATUS_ICONS.get(current_status, "")
-                label = f"{status_icon} **{v['lemma']}** ({v['pos']}) — {count}×" if status_icon else f"**{v['lemma']}** ({v['pos']}) — {count}×"
+        lookup = get_lookup()
+        for v in display_vocab:
+            vid = v["vocabulary_id"]
+            count = v["occurrence_count"]
+            current_status = statuses.get(vid, "new")
+            status_icon = STATUS_ICONS.get(current_status, "")
+            label = f"{status_icon} **{v['lemma']}** ({v['pos']}) — {count}×" if status_icon else f"**{v['lemma']}** ({v['pos']}) — {count}×"
 
-                with st.expander(label):
-                    dict_entry = _cached_dict_lookup(v["lemma"], v["pos"])
-                    gloss_nl = v["translation"] or (dict_entry.get("gloss") if dict_entry else None)
-                    gloss_en = dict_entry.get("gloss_en") if dict_entry else None
-                    dict_example = dict_entry.get("example") if dict_entry else None
+            with st.expander(label):
+                dict_entry = _cached_dict_lookup(v["lemma"], v["pos"])
+                gloss_nl = v["translation"] or (dict_entry.get("gloss") if dict_entry else None)
+                gloss_en = dict_entry.get("gloss_en") if dict_entry else None
+                dict_example = dict_entry.get("example") if dict_entry else None
 
-                    if gloss_nl:
-                        st.markdown(f"**Meaning:** {gloss_nl}")
-                    if gloss_en:
-                        st.markdown(f"**English:** {gloss_en}")
-                    if not gloss_nl and not gloss_en:
-                        st.caption("No definition available.")
-                    links = lookup.get_links(v["lemma"])
-                    link_str = " · ".join(f"[{k}]({url})" for k, url in links.items())
-                    st.caption(f"**Look up:** {link_str}")
+                if gloss_nl:
+                    st.markdown(f"**Meaning:** {gloss_nl}")
+                if gloss_en:
+                    st.markdown(f"**English:** {gloss_en}")
+                if not gloss_nl and not gloss_en:
+                    st.caption("No definition available.")
+                links = lookup.get_links(v["lemma"])
+                link_str = " · ".join(f"[{k}]({url})" for k, url in links.items())
+                st.caption(f"**Look up:** {link_str}")
 
-                    example_to_show = dict_example or v.get("example_sentence")
-                    if example_to_show:
-                        st.markdown(f"**Example:** *{example_to_show}*")
+                example_to_show = dict_example or v.get("example_sentence")
+                if example_to_show:
+                    st.markdown(f"**Example:** *{example_to_show}*")
 
-                    if v.get("surface_forms"):
-                        forms = [f.strip() for f in v["surface_forms"].split("|") if f.strip()]
-                        if len(forms) > 1:
-                            st.markdown(f"**Forms in episode:** {', '.join(forms)}")
-                        elif forms and forms[0].lower() != v["lemma"].lower():
-                            st.markdown(f"**Form in episode:** {forms[0]}")
+                if v.get("surface_forms"):
+                    forms = [f.strip() for f in v["surface_forms"].split("|") if f.strip()]
+                    if len(forms) > 1:
+                        st.markdown(f"**Forms in episode:** {', '.join(forms)}")
+                    elif forms and forms[0].lower() != v["lemma"].lower():
+                        st.markdown(f"**Form in episode:** {forms[0]}")
 
-                    if v.get("example_timestamp") is not None:
-                        st.caption(f"Timestamp: {format_timestamp(v['example_timestamp'])}")
+                if v.get("example_timestamp") is not None:
+                    st.caption(f"Timestamp: {format_timestamp(v['example_timestamp'])}")
 
-                    btn_cols = st.columns(3)
-                    for i, (status_val, status_label) in enumerate(STATUS_LABELS.items()):
-                        with btn_cols[i]:
-                            disabled = current_status == status_val
-                            if st.button(
-                                f"{'● ' if disabled else ''}{status_label}",
-                                key=f"status_{vid}_{status_val}",
-                                disabled=disabled,
-                                use_container_width=True,
-                            ):
-                                set_vocab_status(session, vid, status_val, user_id)
-                                # Fragment auto-reruns; no st.rerun() needed
+                btn_cols = st.columns(3)
+                for i, (status_val, status_label) in enumerate(STATUS_LABELS.items()):
+                    with btn_cols[i]:
+                        disabled = current_status == status_val
+                        if st.button(
+                            f"{'● ' if disabled else ''}{status_label}",
+                            key=f"status_{vid}_{status_val}",
+                            disabled=disabled,
+                            use_container_width=True,
+                        ):
+                            set_vocab_status(session, vid, status_val, user_id)
 
-            if total - len(display_vocab) > 0:
-                st.caption(f"Showing {len(display_vocab)} of {total} words.")
-        finally:
-            session.close()
+        if total - len(display_vocab) > 0:
+            st.caption(f"Showing {len(display_vocab)} of {total} words.")
+    finally:
+        session.close()
 
 
 STATUS_ICONS = {"new": "", "learning": "📖", "known": "✅"}
@@ -919,7 +929,30 @@ def _render_sidebar_auth(session):
                 st.rerun()
             else:
                 st.sidebar.error("Invalid email or password")
-    st.sidebar.caption("[Sign up on the web app](https://dutch-news-learner.vercel.app/register)")
+
+    with st.sidebar.expander("Or sign up"):
+        with st.form("register_form"):
+            reg_email = st.text_input("Email", key="reg_email", placeholder="you@example.com")
+            reg_password = st.text_input("Password", type="password", key="reg_password")
+            reg_confirm = st.text_input("Confirm password", type="password", key="reg_confirm")
+            reg_submitted = st.form_submit_button("Create account")
+            if reg_submitted and reg_email and reg_password and reg_confirm:
+                if reg_password != reg_confirm:
+                    st.error("Passwords don't match")
+                elif len(reg_password) < 8:
+                    st.error("Password must be at least 8 characters")
+                else:
+                    email_clean = reg_email.strip().lower()
+                    if session.query(User).filter_by(email=email_clean).first():
+                        st.error("Email already registered")
+                    else:
+                        user = User(email=email_clean, password_hash=hash_password(reg_password))
+                        session.add(user)
+                        session.commit()
+                        session.refresh(user)
+                        st.session_state["auth_user_id"] = user.id
+                        st.session_state["auth_email"] = user.email
+                        st.rerun()
 
 
 def main():

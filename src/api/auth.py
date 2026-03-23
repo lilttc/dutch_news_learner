@@ -9,9 +9,8 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, Request
 from jose import JWTError, jwt
-from passlib.context import CryptContext
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from src.models import User
 
@@ -22,15 +21,18 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    """
+    Hash password with PBKDF2-SHA256 (Werkzeug). Avoids bcrypt/passlib conflicts
+    some environments have when `import bcrypt` resolves incorrectly.
+    """
+    return generate_password_hash(password, method="pbkdf2:sha256")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    """Verify PBKDF2-SHA256 hash (Werkzeug format)."""
+    return check_password_hash(hashed, plain)
 
 
 def create_access_token(user_id: int, email: str) -> str:

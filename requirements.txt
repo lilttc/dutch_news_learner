@@ -20,7 +20,8 @@ openai>=1.0.0
 ddgs>=9.0.0
 
 # Auth (Phase 6F)
-passlib[bcrypt]>=1.7.4
+# Werkzeug: PBKDF2 password hashes (avoids bcrypt/passlib env conflicts)
+werkzeug>=3.0.0
 python-jose[cryptography]>=3.3.0
 
 # API & Frontend (Phase 3)

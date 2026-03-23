@@ -10,7 +10,7 @@ sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0  # Postgres driver (Neon)
 
 # Auth (Phase 6F)
-passlib[bcrypt]>=1.7.4
+werkzeug>=3.0.0
 python-jose[cryptography]>=3.3.0
 
 # Config
