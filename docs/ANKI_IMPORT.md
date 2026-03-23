@@ -12,14 +12,15 @@ GET /api/vocabulary/export?format=csv&template=anki
 
 Optional filters (same as the default export):
 
-- `status=all|new|learning|known`
+- `status=all` **or** comma-separated subset, e.g. `status=new,learning`
 - `has_note=true|false` — only rows with / without a learner note
+- `episode_from=YYYY-MM-DD` and/or `episode_to=YYYY-MM-DD` — only words that appear in an episode published on those calendar days (UTC). Example: today’s video only → set both to today’s date.
 
 ## Columns
 
 | Column | Contents |
 |--------|-----------|
-| **Front** | Lemma (headword) |
+| **Front** | Word (dictionary headword / lemma) |
 | **Back** | NL meaning, EN meaning, episode example, and your note (when present), separated by newlines |
 | **Tags** | `dutch_news_learner` |
 

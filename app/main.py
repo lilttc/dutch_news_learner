@@ -6,11 +6,12 @@ Click words in the transcript to jump to their definition.
 Run with: streamlit run app/main.py
 """
 
+import inspect
 import json
 import re
 import sys
 import uuid
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -28,6 +29,15 @@ from src.api.auth import hash_password, verify_password
 from src.api.routes.vocabulary import USER_SENTENCE_MAX_LEN
 from src.api.session import get_or_create_session
 from src.dictionary import get_lookup
+from src.vocab_export import (
+    DEFAULT_EXPORT_COLUMNS,
+    EXPORT_COLUMN_LABELS,
+    ORDERED_EXPORT_COLUMNS,
+    build_anki_row,
+    build_export_rows,
+    export_rows_to_csv,
+    project_export_columns,
+)
 from src.models import (
     Episode,
     EpisodeVocabulary,
@@ -38,6 +48,41 @@ from src.models import (
     get_engine,
     get_session,
 )
+
+
+def _streamlit_build_export_rows(session, lookup, user_id, statuses_arg, has_note, d_from, d_to):
+    """
+    Call build_export_rows with optional episode date filter.
+
+    Older checkouts may lack episode_date_from / episode_date_to on build_export_rows;
+    avoid crashing and warn if the user enabled date filtering.
+    """
+    sig = inspect.signature(build_export_rows)
+    if "episode_date_from" in sig.parameters:
+        return build_export_rows(
+            session,
+            lookup,
+            user_id,
+            statuses_arg,
+            has_note,
+            episode_date_from=d_from,
+            episode_date_to=d_to,
+        )
+    if d_from is not None or d_to is not None:
+        st.warning(
+            "Your **src/vocab_export.py** is missing the episode date parameters on "
+            "`build_export_rows`. Pull the latest repo (or re-save that file). "
+            "Running **without** the episode date filter for now."
+        )
+    return build_export_rows(session, lookup, user_id, statuses_arg, has_note)
+
+
+def _streamlit_export_rows_to_csv(fieldnames, rows, *, header_aliases=None):
+    sig = inspect.signature(export_rows_to_csv)
+    if header_aliases is not None and "header_aliases" in sig.parameters:
+        return export_rows_to_csv(fieldnames, rows, header_aliases=header_aliases)
+    return export_rows_to_csv(fieldnames, rows)
+
 
 # Page config
 st.set_page_config(
@@ -301,11 +346,17 @@ def build_word_to_lemma_map(episode_vocab_list):
     return word_to_lemma
 
 
-def build_vocab_bubble_data(episode_vocab_list):
+def build_vocab_bubble_data(
+    episode_vocab_list,
+    statuses_by_vid: dict[int, str] | None = None,
+):
     """
-    Build vocabulary data for the click-to-show bubble: lemma -> list of {pos, meaning, forms, example, links}.
+    Build vocabulary data for the click-to-show bubble: lemma -> list of entries.
+
+    Each entry includes vocabulary_id and user_status for transcript bubble actions.
     """
     lookup = get_lookup()
+    statuses_by_vid = statuses_by_vid or {}
     by_lemma = {}
     for ev in episode_vocab_list:
         v = ev.vocabulary_item
@@ -323,6 +374,8 @@ def build_vocab_bubble_data(episode_vocab_list):
             forms = [f.strip() for f in ev.surface_forms.split("|") if f.strip()]
         links = lookup.get_links(v.lemma)
         entry = {
+            "vocabulary_id": v.id,
+            "user_status": statuses_by_vid.get(v.id, "new"),
             "pos": v.pos or "",
             "lemma": v.lemma,
             "meaning": meaning,
@@ -402,6 +455,13 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
 .bubble-section {{ margin:6px 0; }}
 .bubble-links {{ margin-top:10px; font-size:12px; }}
 .bubble-links a {{ color:#1f77b4; margin-right:8px; }}
+.bubble-status {{ margin-top:12px; padding-top:10px; border-top:1px solid #eee; }}
+.bubble-status-link {{
+  display:inline-block; margin:4px 6px 0 0; padding:5px 10px; border-radius:6px;
+  background:#f3f4f6; text-decoration:none; color:#1f77b4; font-size:13px;
+}}
+.bubble-status-link:hover {{ background:#e5e7eb; }}
+.bubble-status-link.current {{ font-weight:600; background:#d1fae5; color:#065f46; }}
 .transcript-line {{ margin-bottom:14px; }}
 .transcript-ts {{ font-weight:bold; }}
 .transcript-ts a {{ color:inherit; cursor:pointer; }}
@@ -424,12 +484,33 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
   var bubbleContent = document.getElementById('bubble-content');
   var overlay = document.getElementById('bubble-overlay');
 
+  function vocabStatusHref(vocabId, status) {{
+    try {{
+      var u = new URL(window.parent.location.href);
+      u.searchParams.set('vocab_status_update', String(vocabId) + ':' + status);
+      return u.toString();
+    }} catch (err) {{
+      return '#';
+    }}
+  }}
+
+  function statusLink(vocabId, statusKey, label, current) {{
+    var cls = 'bubble-status-link' + (current === statusKey ? ' current' : '');
+    return '<a class="' + cls + '" href="' + vocabStatusHref(vocabId, statusKey) + '" target="_top">' + label + '</a>';
+  }}
+
   function renderBubble(lemma, clickedWord) {{
     var lookupKey = (clickedWord && (vocabData[clickedWord] || vocabData[clickedWord.toLowerCase()])) ? clickedWord : lemma;
     var entries = vocabData[lookupKey] || vocabData[lookupKey.toLowerCase()] || vocabData[lemma] || vocabData[lemma.toLowerCase()];
     if (!entries || entries.length === 0) return;
     var displayLemma = clickedWord || lemma;
     var html = '<div class="bubble-title">' + displayLemma + '</div>';
+    var vocabId = null;
+    var userStatus = 'new';
+    entries.forEach(function(e, i) {{
+      if (e.vocabulary_id != null && vocabId == null) vocabId = e.vocabulary_id;
+      if (e.user_status) userStatus = e.user_status;
+    }});
     entries.forEach(function(e, i) {{
       if (e.pos) html += '<div class="bubble-section"><strong>(' + e.pos + ')</strong></div>';
       if (e.lemma && e.lemma.toLowerCase() !== displayLemma.toLowerCase()) {{
@@ -449,6 +530,13 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
         html += '<div class="bubble-section bubble-links"><strong>Look up:</strong> ' + links.join(' · ') + '</div>';
       }}
     }});
+    if (vocabId != null) {{
+      html += '<div class="bubble-section bubble-status"><strong>My progress:</strong><br/>' +
+        statusLink(vocabId, 'new', 'New', userStatus) +
+        statusLink(vocabId, 'learning', 'Learning', userStatus) +
+        statusLink(vocabId, 'known', 'Known', userStatus) +
+        '<div style="font-size:11px;color:#666;margin-top:6px;">Saves and reloads the page (same as Vocabulary tab).</div></div>';
+    }}
     bubbleContent.innerHTML = html;
   }}
 
@@ -562,6 +650,52 @@ DEFAULT_VOCAB_LIMIT = 20
 
 
 STATUS_LABELS = {"new": "New", "learning": "Learning", "known": "Known"}
+
+
+def _drop_vocab_status_query_param() -> None:
+    if "vocab_status_update" not in st.query_params:
+        return
+    try:
+        del st.query_params["vocab_status_update"]
+    except (KeyError, TypeError):
+        pass
+
+
+def _apply_vocab_status_from_query(session, user_id: int) -> None:
+    """
+    Transcript word-bubble links navigate with ?vocab_status_update=<vocabulary_id>:<status>.
+    Apply once server-side (same DB path as Vocabulary tab), then remove param and rerun.
+    """
+    raw = st.query_params.get("vocab_status_update")
+    if not raw:
+        return
+    parts = str(raw).split(":", 1)
+    if len(parts) != 2:
+        _drop_vocab_status_query_param()
+        st.rerun()
+        return
+    vid_s, status = parts[0].strip(), parts[1].strip().lower()
+    try:
+        vid = int(vid_s)
+    except ValueError:
+        _drop_vocab_status_query_param()
+        st.rerun()
+        return
+    if status not in STATUS_LABELS:
+        _drop_vocab_status_query_param()
+        st.rerun()
+        return
+    if session.query(VocabularyItem).get(vid) is None:
+        _drop_vocab_status_query_param()
+        st.rerun()
+        return
+    set_vocab_status(session, vid, status, user_id)
+    _drop_vocab_status_query_param()
+    try:
+        st.toast(f"Saved: {STATUS_LABELS[status]}", icon="✅")
+    except Exception:
+        pass
+    st.rerun()
 
 
 @st.cache_data(ttl=3600)
@@ -848,17 +982,29 @@ def render_vocabulary(episode_vocab_list, session=None, statuses=None,
         st.caption(f"Showing {len(display_vocab)} of {total} words.")
 
 
-def _render_tab_transcript(episode, vocab_list):
+def _render_tab_transcript(episode, vocab_list, session, user_id: int):
     """Render the Transcript tab: translation toggle + clickable transcript."""
     show_translation = st.checkbox(
         "Show English translation",
         value=False,
         key="show_translation",
     )
-    st.caption("Click any underlined word to see its definition.")
+    st.caption(
+        "Click any underlined word to see its definition. "
+        "In the bubble, use **New / Learning / Known** to save progress (page reloads)."
+    )
     if episode.subtitle_segments:
         word_to_lemma = build_word_to_lemma_map(vocab_list) if vocab_list else None
-        vocab_data = build_vocab_bubble_data(vocab_list) if vocab_list else None
+        statuses_by_vid: dict[int, str] = {}
+        if vocab_list:
+            all_vids = [ev.vocabulary_item.id for ev in vocab_list]
+            uv_map = load_user_vocab_for_ids(session, user_id, all_vids)
+            statuses_by_vid = {vid: t[0] for vid, t in uv_map.items()}
+        vocab_data = (
+            build_vocab_bubble_data(vocab_list, statuses_by_vid=statuses_by_vid)
+            if vocab_list
+            else None
+        )
         render_transcript_with_bubbles(
             episode.subtitle_segments,
             episode.video_id,
@@ -1012,6 +1158,169 @@ def _resolve_user_id(session):
     return get_or_create_session(session, token)
 
 
+def _render_sidebar_footer():
+    st.sidebar.markdown("---")
+    st.sidebar.caption("Drie onderwerpen in makkelijke taal")
+    st.sidebar.markdown("[☕ Buy me a coffee](https://buymeacoffee.com/lilttc)")
+
+
+def _render_my_vocabulary_page(session, user_id: int) -> None:
+    """Table of saved words: filters, column picker, preview, CSV downloads (matches API export)."""
+    st.title("My vocabulary")
+    st.caption(
+        "Words you’ve saved (status or notes). Filter, pick columns, preview, then download. "
+        "For Anki, use **Download Anki CSV** and see `docs/ANKI_IMPORT.md`."
+    )
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        status_sel = st.multiselect(
+            "Status (include any of)",
+            options=["new", "learning", "known"],
+            default=["new", "learning", "known"],
+            format_func=lambda x: {
+                "new": "New",
+                "learning": "Learning",
+                "known": "Known",
+            }[x],
+            key="mv_status_ms",
+        )
+    with c2:
+        note_filter = st.selectbox(
+            "Learner note",
+            options=["any", "with_note", "without_note"],
+            format_func=lambda x: {
+                "any": "Any",
+                "with_note": "With note",
+                "without_note": "Without note",
+            }[x],
+            key="mv_note_filter",
+        )
+    with c3:
+        st.text_input(
+            "Search word",
+            key="mv_search",
+            placeholder="Substring in word (headword)",
+        )
+
+    if not status_sel:
+        st.warning("Select at least one status, or re-select all three to include every status.")
+        return
+
+    statuses_arg = (
+        None
+        if set(status_sel) == {"new", "learning", "known"}
+        else list(status_sel)
+    )
+
+    has_note = None
+    if note_filter == "with_note":
+        has_note = True
+    elif note_filter == "without_note":
+        has_note = False
+
+    use_episode_dates = st.checkbox(
+        "Only words from episodes published in a date range",
+        value=False,
+        key="mv_use_episode_dates",
+        help=(
+            "Uses each episode’s **publish date** in the database (calendar day, UTC), "
+            "not the day you studied. Good for “only today’s video” if you set both ends to today."
+        ),
+    )
+    d_from: date | None = None
+    d_to: date | None = None
+    if use_episode_dates:
+        today = date.today()
+        dr = st.date_input(
+            "Episode published between (inclusive)",
+            value=(today, today),
+            key="mv_episode_date_range",
+        )
+        if isinstance(dr, tuple) and len(dr) == 2:
+            d_from, d_to = dr[0], dr[1]
+        elif hasattr(dr, "year"):
+            d_from = d_to = dr
+
+    with st.expander("Watched / unwatched episodes"):
+        st.markdown(
+            "**Not available yet.** The app doesn’t store which episodes you’ve opened or finished, "
+            "so we can’t filter vocabulary by watch state. A future version could save that per account "
+            "or session and add a filter here."
+        )
+
+    lookup = get_lookup()
+    rows = _streamlit_build_export_rows(
+        session,
+        lookup,
+        user_id,
+        statuses_arg,
+        has_note,
+        d_from,
+        d_to,
+    )
+
+    search = (st.session_state.get("mv_search") or "").strip().lower()
+    if search:
+        rows = [
+            r for r in rows if search in (r.get("lemma") or "").lower()
+        ]
+
+    if not rows:
+        st.info(
+            "No vocabulary matches these filters (or your search). "
+            "Open an episode → **Vocabulary** tab to set status or save a note."
+        )
+        return
+
+    selected_cols = st.multiselect(
+        "Columns to show and export",
+        options=list(ORDERED_EXPORT_COLUMNS),
+        default=list(DEFAULT_EXPORT_COLUMNS),
+        format_func=lambda c: EXPORT_COLUMN_LABELS.get(c, c),
+        key="mv_columns",
+    )
+    if not selected_cols:
+        st.warning("Choose at least one column.")
+        return
+
+    display_rows = [project_export_columns(r, selected_cols) for r in rows]
+
+    st.subheader("Preview (first 10 rows)")
+    preview_ui = [
+        {EXPORT_COLUMN_LABELS.get(k, k): v for k, v in row.items()}
+        for row in display_rows[:10]
+    ]
+    st.dataframe(preview_ui, use_container_width=True)
+    st.caption(f"**{len(rows)}** row(s) match — downloads include all of them.")
+
+    csv_body = _streamlit_export_rows_to_csv(
+        selected_cols,
+        display_rows,
+        header_aliases=EXPORT_COLUMN_LABELS,
+    )
+    anki_data = [build_anki_row(r) for r in rows]
+    csv_anki = export_rows_to_csv(["Front", "Back", "Tags"], anki_data)
+
+    d1, d2 = st.columns(2)
+    with d1:
+        st.download_button(
+            label="Download CSV",
+            data=("\ufeff" + csv_body).encode("utf-8"),
+            file_name="my_vocabulary.csv",
+            mime="text/csv",
+            key="mv_dl_csv",
+        )
+    with d2:
+        st.download_button(
+            label="Download Anki CSV",
+            data=("\ufeff" + csv_anki).encode("utf-8"),
+            file_name="my_vocabulary_anki.csv",
+            mime="text/csv",
+            key="mv_dl_anki",
+        )
+
+
 def _render_sidebar_auth(session):
     """Render login form or logged-in user + logout in sidebar."""
     auth_user_id = st.session_state.get("auth_user_id")
@@ -1069,6 +1378,23 @@ def main():
     try:
         user_id = _resolve_user_id(session)
         st.session_state["user_id"] = user_id
+        _apply_vocab_status_from_query(session, user_id)
+
+        # --- Sidebar ---
+        st.sidebar.title("🇳🇱 Dutch News Learner")
+        st.sidebar.markdown("---")
+        _render_sidebar_auth(session)
+        st.sidebar.markdown("---")
+        nav = st.sidebar.radio(
+            "Navigate",
+            ["Episodes", "My vocabulary"],
+            key="main_nav",
+        )
+
+        if nav == "My vocabulary":
+            _render_sidebar_footer()
+            _render_my_vocabulary_page(session, user_id)
+            return
 
         episodes = load_episodes(session)
 
@@ -1094,11 +1420,6 @@ def main():
             except ValueError:
                 pass
 
-        # --- Sidebar ---
-        st.sidebar.title("🇳🇱 Dutch News Learner")
-        st.sidebar.markdown("---")
-        _render_sidebar_auth(session)
-        st.sidebar.markdown("---")
         selected_label = st.sidebar.selectbox(
             "Choose episode",
             options=list(episode_options.keys()),
@@ -1106,9 +1427,7 @@ def main():
             key="episode_select",
         )
         selected_id = episode_options[selected_label]
-        st.sidebar.markdown("---")
-        st.sidebar.caption("Drie onderwerpen in makkelijke taal")
-        st.sidebar.markdown("[☕ Buy me a coffee](https://buymeacoffee.com/lilttc)")
+        _render_sidebar_footer()
 
         # --- Load episode data ---
         episode = load_episode_with_data(session, selected_id)
@@ -1134,7 +1453,7 @@ def main():
         ])
 
         with tab_transcript:
-            _render_tab_transcript(episode, vocab_list)
+            _render_tab_transcript(episode, vocab_list, session, user_id)
 
         with tab_vocabulary:
             _render_tab_vocabulary(vocab_list, session, episode_id=selected_id)

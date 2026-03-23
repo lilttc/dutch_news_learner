@@ -294,14 +294,15 @@ High value for active learners: personal sentence/notes per word, then browse an
 - [x] **Anki-shaped export** — `template=anki` → `Front` / `Back` / `Tags`; see `docs/ANKI_IMPORT.md`
 - [x] **Auth** — `get_user_id` (Bearer / `X-Session-Token` / legacy)
 
-#### Remaining — “My vocabulary” personal page (Streamlit first)
-- [ ] **New page or section** — e.g. sidebar “My vocabulary”: table of all words for current user (lemma, status, definitions, example, **user sentence**, etc.)
-- [ ] **Filters** — Status (new / learning / known / all); search by lemma; optional **has my note** / **missing note**
-- [ ] **Column visibility** — Toggles for: lemma, POS, status, definition (NL), English, episode example, **user sentence**, (optional) last seen episode — match exportable fields where possible
-- [ ] **Export actions** — Buttons: **Download CSV** (and/or Excel — `.xlsx` via `openpyxl` *or* CSV-only v1 that opens in Excel); **Download Anki-style CSV** if separate from generic export
-- [ ] **Preview** — Show first ~10 rows + chosen columns before download (catch wrong filters)
-- [ ] **Bulk scope** — “Export rows matching current filters” vs “export selected rows” (checkbox selection = nice follow-up)
+#### Remaining — “My vocabulary” personal page (Streamlit first) ✅ DONE (this commit)
+- [x] **New page or section** — Sidebar **Navigate → My vocabulary**; table via preview + downloads
+- [x] **Filters** — Status **multiselect** (subset of new / learning / known); learner note (any / with / without); **word** substring search; optional **episode publish date range** (UTC calendar day)
+- [x] **Column visibility** — `multiselect` aligned with API export columns (`src/vocab_export.py`)
+- [x] **Export actions** — **Download CSV** + **Download Anki CSV** (UTF-8 BOM); Excel = open CSV in Excel for v1
+- [x] **Preview** — First 10 rows shown before download
+- [ ] **Bulk scope** — Row checkboxes + “export selection only” (follow-up)
 - [ ] **Saved presets (later)** — Named column sets, e.g. “Minimal Anki” vs “Full sheet”
+- [ ] **Episode watch state** — Persist watched/unwatched (or progress) per user + episode; then filter “My vocabulary” / export by watch state
 
 #### Remaining — Next.js (defer after Streamlit)
 - [ ] **Episode vocabulary tab** — Note field + save via `PATCH .../note` (reuse API)
