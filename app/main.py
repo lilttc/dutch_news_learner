@@ -480,6 +480,117 @@ DEFAULT_VOCAB_LIMIT = 20
 
 
 STATUS_LABELS = {"new": "New", "learning": "Learning", "known": "Known"}
+
+
+@st.cache_data(ttl=3600)
+def _cached_dict_lookup(lemma: str, pos: str | None):
+    """Cache dictionary lookups to avoid repeated SQLite queries on fragment rerun."""
+    return get_lookup().lookup_with_example(lemma, pos)
+
+
+@st.fragment
+def _render_vocabulary_fragment(episode_id):
+    """
+    Fragment: vocabulary list with status buttons. Reruns only this block when
+    a status button is clicked, avoiding full-app freeze.
+    """
+    if not episode_id:
+        return
+    session = get_db_session()
+    try:
+        with st.spinner("Updating…"):
+            episode = load_episode_with_data(session, episode_id)
+            if not episode:
+                return
+            vocab_list = _filter_vocab(episode.episode_vocabulary or [])
+            if not vocab_list:
+                return
+
+            statuses = load_user_vocab_statuses(session)
+            search_query = st.session_state.get("vocab_search", "").strip()
+            sort_by = st.session_state.get("vocab_sort", "frequency")
+            known_filter = st.session_state.get("vocab_known_filter", "hide")
+            hide_known = known_filter == "hide"
+            show_all = st.session_state.get("vocab_show_all", False)
+
+            if hide_known:
+                vocab_list = [
+                    ev for ev in vocab_list
+                    if statuses.get(ev.vocabulary_item.id, "new") != "known"
+                ]
+            if search_query:
+                q = search_query.lower()
+                vocab_list = [ev for ev in vocab_list if q in ev.vocabulary_item.lemma.lower()]
+            if sort_by == "alpha":
+                vocab_list = sorted(vocab_list, key=lambda ev: ev.vocabulary_item.lemma.lower())
+            else:
+                vocab_list = sorted(
+                    vocab_list,
+                    key=lambda ev: ev.occurrence_count or 0,
+                    reverse=True,
+                )
+
+            total = len(vocab_list)
+            is_searching = bool(search_query)
+            display_vocab = vocab_list if (show_all or is_searching) else vocab_list[:DEFAULT_VOCAB_LIMIT]
+
+            lookup = get_lookup()
+            for ev in display_vocab:
+                v = ev.vocabulary_item
+                count = ev.occurrence_count if ev.occurrence_count is not None else 0
+                current_status = statuses.get(v.id, "new")
+                status_icon = STATUS_ICONS.get(current_status, "")
+                label = f"{status_icon} **{v.lemma}** ({v.pos}) — {count}×" if status_icon else f"**{v.lemma}** ({v.pos}) — {count}×"
+
+                with st.expander(label):
+                    dict_entry = _cached_dict_lookup(v.lemma, v.pos)
+                    gloss_nl = v.translation or (dict_entry.get("gloss") if dict_entry else None)
+                    gloss_en = dict_entry.get("gloss_en") if dict_entry else None
+                    dict_example = dict_entry.get("example") if dict_entry else None
+
+                    if gloss_nl:
+                        st.markdown(f"**Meaning:** {gloss_nl}")
+                    if gloss_en:
+                        st.markdown(f"**English:** {gloss_en}")
+                    if not gloss_nl and not gloss_en:
+                        st.caption("No definition available.")
+                    links = lookup.get_links(v.lemma)
+                    link_str = " · ".join(f"[{k}]({url})" for k, url in links.items())
+                    st.caption(f"**Look up:** {link_str}")
+
+                    example_to_show = dict_example or ev.example_sentence
+                    if example_to_show:
+                        st.markdown(f"**Example:** *{example_to_show}*")
+
+                    if ev.surface_forms:
+                        forms = [f.strip() for f in ev.surface_forms.split("|") if f.strip()]
+                        if len(forms) > 1:
+                            st.markdown(f"**Forms in episode:** {', '.join(forms)}")
+                        elif forms and forms[0].lower() != v.lemma.lower():
+                            st.markdown(f"**Form in episode:** {forms[0]}")
+
+                    if ev.example_timestamp is not None:
+                        st.caption(f"Timestamp: {format_timestamp(ev.example_timestamp)}")
+
+                    btn_cols = st.columns(3)
+                    for i, (status_val, status_label) in enumerate(STATUS_LABELS.items()):
+                        with btn_cols[i]:
+                            disabled = current_status == status_val
+                            if st.button(
+                                f"{'● ' if disabled else ''}{status_label}",
+                                key=f"status_{v.id}_{status_val}",
+                                disabled=disabled,
+                                use_container_width=True,
+                            ):
+                                set_vocab_status(session, v.id, status_val)
+                                # Fragment auto-reruns; no st.rerun() needed
+
+            if total - len(display_vocab) > 0:
+                st.caption(f"Showing {len(display_vocab)} of {total} words.")
+    finally:
+        session.close()
+
+
 STATUS_ICONS = {"new": "", "learning": "📖", "known": "✅"}
 
 
@@ -609,7 +720,7 @@ def _render_tab_transcript(episode, vocab_list):
         st.info("No subtitles for this episode.")
 
 
-def _render_tab_vocabulary(vocab_list, session):
+def _render_tab_vocabulary(vocab_list, session, episode_id=None):
     """Render the Vocabulary tab: search, sort, known-words filter, status buttons."""
     if not vocab_list:
         st.info("No vocabulary extracted. Run `python scripts/extract_vocabulary.py`.")
@@ -620,18 +731,17 @@ def _render_tab_vocabulary(vocab_list, session):
         "Use the [Next.js version](https://dutch-news-learner.vercel.app) for per-device storage, "
         "or wait for anonymous sessions (coming soon)."
     )
-    statuses = load_user_vocab_statuses(session)
 
     col_search, col_sort = st.columns([2, 1])
     with col_search:
-        vocab_search = st.text_input(
+        st.text_input(
             "Search word",
             placeholder="Type to filter (e.g. politie, kind)...",
             key="vocab_search",
             label_visibility="collapsed",
         )
     with col_sort:
-        sort_option = st.radio(
+        st.radio(
             "Sort",
             options=["frequency", "alpha"],
             format_func=lambda x: "Most frequent" if x == "frequency" else "A-Z",
@@ -642,30 +752,21 @@ def _render_tab_vocabulary(vocab_list, session):
 
     col_filter, col_show = st.columns([1, 1])
     with col_filter:
-        known_filter = st.radio(
+        st.radio(
             "Filter",
             options=["hide", "show"],
             format_func=lambda x: "Hide known" if x == "hide" else "Show all",
             horizontal=True,
             key="vocab_known_filter",
         )
-        hide_known = known_filter == "hide"
     with col_show:
-        show_all = st.checkbox(
+        st.checkbox(
             f"Show all {len(vocab_list)} words",
             value=False,
             key="vocab_show_all",
         )
 
-    render_vocabulary(
-        vocab_list,
-        session=session,
-        statuses=statuses,
-        search_query=vocab_search,
-        sort_by=sort_option,
-        show_all=show_all,
-        hide_known=hide_known,
-    )
+    _render_vocabulary_fragment(episode_id or 0)
 
 
 def _render_tab_related_reading(episode):
@@ -809,7 +910,7 @@ def main():
             _render_tab_transcript(episode, vocab_list)
 
         with tab_vocabulary:
-            _render_tab_vocabulary(vocab_list, session)
+            _render_tab_vocabulary(vocab_list, session, episode_id=selected_id)
 
         with tab_reading:
             _render_tab_related_reading(episode)
