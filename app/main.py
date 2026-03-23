@@ -9,6 +9,7 @@ Run with: streamlit run app/main.py
 import json
 import re
 import sys
+import uuid
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -23,6 +24,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 import streamlit as st
 from sqlalchemy.orm import joinedload
 
+from src.api.session import get_or_create_session
 from src.dictionary import get_lookup
 from src.models import (
     Episode,
@@ -532,7 +534,8 @@ def _render_vocabulary_fragment(episode_id):
 
         session = get_db_session()
         try:
-            statuses = load_user_vocab_statuses(session)
+            user_id = st.session_state.get("user_id", 1)
+            statuses = load_user_vocab_statuses(session, user_id)
             search_query = st.session_state.get("vocab_search", "").strip()
             sort_by = st.session_state.get("vocab_sort", "frequency")
             known_filter = st.session_state.get("vocab_known_filter", "hide")
@@ -608,7 +611,7 @@ def _render_vocabulary_fragment(episode_id):
                                 disabled=disabled,
                                 use_container_width=True,
                             ):
-                                set_vocab_status(session, vid, status_val)
+                                set_vocab_status(session, vid, status_val, user_id)
                                 # Fragment auto-reruns; no st.rerun() needed
 
             if total - len(display_vocab) > 0:
@@ -753,9 +756,7 @@ def _render_tab_vocabulary(vocab_list, session, episode_id=None):
         return
 
     st.caption(
-        "💡 Vocabulary status is shared across all visitors on this app. "
-        "Use the [Next.js version](https://dutch-news-learner.vercel.app) for per-device storage, "
-        "or wait for anonymous sessions (coming soon)."
+        "💡 Your progress is saved per session (URL). Bookmark your link to keep the same vocabulary status."
     )
 
     col_search, col_sort = st.columns([2, 1])
@@ -871,6 +872,18 @@ def _render_tab_related_reading(episode):
 def main():
     session = get_db_session()
     try:
+        # Ensure session token in URL (Phase 6E anonymous sessions)
+        token = st.query_params.get("u", "").strip()
+        if not token or len(token) != 36 or token.count("-") != 4:
+            new_token = str(uuid.uuid4())
+            params = dict(st.query_params)
+            params["u"] = new_token
+            st.query_params.update(params)
+            st.rerun()
+
+        user_id = get_or_create_session(session, token)
+        st.session_state["user_id"] = user_id
+
         episodes = load_episodes(session)
 
         if not episodes:
