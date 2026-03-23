@@ -1,8 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { VocabWord } from "@/lib/api";
-import { updateVocabStatus } from "@/lib/api";
+
+const VOCAB_STATUS_KEY = "dutch_news_vocab_status";
+
+function loadStatusesFromStorage(): Record<number, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(VOCAB_STATUS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    const result: Record<number, string> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      const id = parseInt(k, 10);
+      if (!isNaN(id) && ["new", "learning", "known"].includes(v)) {
+        result[id] = v;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function saveStatusToStorage(vocabId: number, status: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const stored = loadStatusesFromStorage();
+    if (status === "new") {
+      delete stored[vocabId];
+    } else {
+      stored[vocabId] = status;
+    }
+    localStorage.setItem(VOCAB_STATUS_KEY, JSON.stringify(stored));
+  } catch {
+    // ignore
+  }
+}
 
 const STATUS_OPTIONS = [
   { value: "new", label: "New" },
@@ -23,6 +58,14 @@ export function VocabularyList({ vocabulary }: { vocabulary: VocabWord[] }) {
     return map;
   });
   const [expanded, setExpanded] = useState<number | null>(null);
+
+  // Merge localStorage (per-user, this device) over API. localStorage wins.
+  useEffect(() => {
+    const stored = loadStatusesFromStorage();
+    if (Object.keys(stored).length > 0) {
+      setStatuses((prev) => ({ ...prev, ...stored }));
+    }
+  }, []);
 
   let filtered = vocabulary.filter((v) => {
     if (hideKnown && (statuses[v.vocabulary_id] || v.status) === "known")
@@ -46,22 +89,16 @@ export function VocabularyList({ vocabulary }: { vocabulary: VocabWord[] }) {
     showAll || isSearching ? filtered : filtered.slice(0, DEFAULT_LIMIT);
   const hiddenCount = filtered.length - display.length;
 
-  async function handleStatusChange(vocabId: number, newStatus: string) {
+  function handleStatusChange(vocabId: number, newStatus: string) {
     setStatuses((prev) => ({ ...prev, [vocabId]: newStatus }));
-    try {
-      await updateVocabStatus(vocabId, newStatus);
-    } catch {
-      // Revert on error
-      setStatuses((prev) => ({
-        ...prev,
-        [vocabId]: vocabulary.find((v) => v.vocabulary_id === vocabId)
-          ?.status ?? "new",
-      }));
-    }
+    saveStatusToStorage(vocabId, newStatus);
   }
 
   return (
     <div>
+      <p className="mb-2 text-xs text-[var(--muted)]">
+        Status saved in this browser — yours alone, not shared with others.
+      </p>
       {/* Controls */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <input
@@ -81,15 +118,29 @@ export function VocabularyList({ vocabulary }: { vocabulary: VocabWord[] }) {
           <option value="frequency">Most frequent</option>
           <option value="alpha">A-Z</option>
         </select>
-        <label className="flex items-center gap-1.5 text-sm">
-          <input
-            type="checkbox"
-            checked={hideKnown}
-            onChange={(e) => setHideKnown(e.target.checked)}
-            className="rounded"
-          />
-          Hide known
-        </label>
+        <span className="flex items-center gap-2 text-sm">
+          <span className="text-[var(--muted)]">Filter:</span>
+          <label className="flex items-center gap-1">
+            <input
+              type="radio"
+              name="knownFilter"
+              checked={hideKnown}
+              onChange={() => setHideKnown(true)}
+              className="rounded-full"
+            />
+            Hide known
+          </label>
+          <label className="flex items-center gap-1">
+            <input
+              type="radio"
+              name="knownFilter"
+              checked={!hideKnown}
+              onChange={() => setHideKnown(false)}
+              className="rounded-full"
+            />
+            Show all
+          </label>
+        </span>
         <label className="flex items-center gap-1.5 text-sm">
           <input
             type="checkbox"

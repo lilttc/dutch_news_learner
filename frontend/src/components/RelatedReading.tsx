@@ -1,5 +1,20 @@
 import type { Article } from "@/lib/api";
 
+/** Fix missing spaces in Dutch text from search snippets (e.g. "deverkiezingenheeft" -> "de verkiezingen heeft"). */
+function fixConcatenatedSpaces(text: string): string {
+  if (!text) return text;
+  let t = text;
+  t = t.replace(/\bde(?=[a-z]{2,})/gi, "de ");
+  t = t.replace(/\bhet(?=[a-z]{2,})/gi, "het ");
+  t = t.replace(/\been(?=[a-z]{2,})/gi, "een ");
+  for (const word of [
+    "heeft", "hebben", "is", "zijn", "van", "op", "te", "dat", "die", "voor", "met", "naar", "uit"
+  ]) {
+    t = t.replace(new RegExp(`([a-z])(${word})\\b`, "g"), "$1 $2");
+  }
+  return t;
+}
+
 interface Props {
   articles: Article[];
   topics: string | null;
@@ -72,11 +87,11 @@ export function RelatedReading({ articles, topics }: Props) {
                         rel="noopener noreferrer"
                         className="text-[var(--accent)] hover:underline"
                       >
-                        {a.title}
+                        {fixConcatenatedSpaces(a.title)}
                       </a>
                       {a.snippet && (
                         <p className="mt-0.5 text-xs text-[var(--muted)]">
-                          {a.snippet}
+                          {fixConcatenatedSpaces(a.snippet)}
                         </p>
                       )}
                     </li>

@@ -46,6 +46,23 @@ st.set_page_config(
 EXCLUDE_LEMMAS = {"journaal"}
 
 
+def fix_concatenated_spaces(text: str) -> str:
+    """
+    Fix missing spaces in Dutch text from search snippets (e.g. "deverkiezingenheeft" -> "de verkiezingen heeft").
+    DuckDuckGo and similar sources sometimes return concatenated words.
+    """
+    if not text or not isinstance(text, str):
+        return text
+    # Insert space after short Dutch articles when followed by a word (2+ letters)
+    text = re.sub(r"\bde(?=[a-z]{2,})", r"de ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bhet(?=[a-z]{2,})", r"het ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\been(?=[a-z]{2,})", r"een ", text, flags=re.IGNORECASE)
+    # Insert space before common Dutch function words when concatenated (lowercase letter before)
+    for word in ("heeft", "hebben", "is", "zijn", "van", "op", "te", "dat", "die", "voor", "met", "naar", "uit"):
+        text = re.sub(rf"([a-z])({word})\b", rf"\1 \2", text)
+    return text
+
+
 @st.cache_resource(ttl=3600)
 def get_db_engine():
     """Create database engine. Cached for 1 hour. Use get_db_session() for a per-request session."""
@@ -598,6 +615,11 @@ def _render_tab_vocabulary(vocab_list, session):
         st.info("No vocabulary extracted. Run `python scripts/extract_vocabulary.py`.")
         return
 
+    st.caption(
+        "💡 Vocabulary status is shared across all visitors on this app. "
+        "Use the [Next.js version](https://dutch-news-learner.vercel.app) for per-device storage, "
+        "or wait for anonymous sessions (coming soon)."
+    )
     statuses = load_user_vocab_statuses(session)
 
     col_search, col_sort = st.columns([2, 1])
@@ -620,7 +642,14 @@ def _render_tab_vocabulary(vocab_list, session):
 
     col_filter, col_show = st.columns([1, 1])
     with col_filter:
-        hide_known = st.checkbox("Hide known words", value=True, key="hide_known")
+        known_filter = st.radio(
+            "Filter",
+            options=["hide", "show"],
+            format_func=lambda x: "Hide known" if x == "hide" else "Show all",
+            horizontal=True,
+            key="vocab_known_filter",
+        )
+        hide_known = known_filter == "hide"
     with col_show:
         show_all = st.checkbox(
             f"Show all {len(vocab_list)} words",
@@ -676,9 +705,9 @@ def _render_tab_related_reading(episode):
             topic_articles = by_topic.get(topic, [])
             if topic_articles:
                 for a in topic_articles:
-                    title = a.get("title", topic)
+                    title = fix_concatenated_spaces(a.get("title", topic))
                     url = a.get("url", "")
-                    snippet = a.get("snippet", "")
+                    snippet = fix_concatenated_spaces(a.get("snippet", "") or "")
                     st.markdown(f"- [{title}]({url})")
                     if snippet:
                         st.caption(snippet)
