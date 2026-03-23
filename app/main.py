@@ -24,12 +24,14 @@ load_dotenv(PROJECT_ROOT / ".env")
 import streamlit as st
 from sqlalchemy.orm import joinedload
 
+from src.api.auth import verify_password
 from src.api.session import get_or_create_session
 from src.dictionary import get_lookup
 from src.models import (
     Episode,
     EpisodeVocabulary,
     SubtitleSegment,
+    User,
     UserVocabulary,
     VocabularyItem,
     get_engine,
@@ -755,8 +757,11 @@ def _render_tab_vocabulary(vocab_list, session, episode_id=None):
         st.info("No vocabulary extracted. Run `python scripts/extract_vocabulary.py`.")
         return
 
+    is_logged_in = st.session_state.get("auth_user_id") is not None
     st.caption(
-        "💡 Your progress is saved per session (URL). Bookmark your link to keep the same vocabulary status."
+        "💡 Your progress is saved to your account."
+        if is_logged_in
+        else "💡 Progress saved per session (URL). Log in to sync across devices."
     )
 
     col_search, col_sort = st.columns([2, 1])
@@ -869,19 +874,58 @@ def _render_tab_related_reading(episode):
         )
 
 
+def _resolve_user_id(session):
+    """
+    Resolve user_id: logged-in User (Phase 6F) > anonymous ?u= token > legacy (1).
+    """
+    auth_user_id = st.session_state.get("auth_user_id")
+    if auth_user_id is not None:
+        return auth_user_id
+
+    token = st.query_params.get("u", "").strip()
+    if not token or len(token) != 36 or token.count("-") != 4:
+        new_token = str(uuid.uuid4())
+        params = dict(st.query_params)
+        params["u"] = new_token
+        st.query_params.update(params)
+        st.rerun()
+
+    return get_or_create_session(session, token)
+
+
+def _render_sidebar_auth(session):
+    """Render login form or logged-in user + logout in sidebar."""
+    auth_user_id = st.session_state.get("auth_user_id")
+    auth_email = st.session_state.get("auth_email")
+
+    if auth_user_id is not None:
+        st.sidebar.caption(f"Logged in as **{auth_email}**")
+        if st.sidebar.button("Log out", key="auth_logout"):
+            del st.session_state["auth_user_id"]
+            del st.session_state["auth_email"]
+            st.rerun()
+        return
+
+    with st.sidebar.form("login_form"):
+        st.caption("Log in to save progress across devices")
+        email = st.text_input("Email", key="auth_email_input", placeholder="you@example.com")
+        password = st.text_input("Password", type="password", key="auth_password_input")
+        submitted = st.form_submit_button("Log in")
+        if submitted and email and password:
+            user = session.query(User).filter_by(email=email.strip().lower()).first()
+            if user and verify_password(password, user.password_hash):
+                st.session_state["auth_user_id"] = user.id
+                st.session_state["auth_email"] = user.email
+                st.rerun()
+            else:
+                st.sidebar.error("Invalid email or password")
+    st.sidebar.caption("[Sign up on the web app](https://dutch-news-learner.vercel.app/register)")
+
+
 def main():
     session = get_db_session()
     try:
-        # Ensure session token in URL (Phase 6E anonymous sessions)
-        token = st.query_params.get("u", "").strip()
-        if not token or len(token) != 36 or token.count("-") != 4:
-            new_token = str(uuid.uuid4())
-            params = dict(st.query_params)
-            params["u"] = new_token
-            st.query_params.update(params)
-            st.rerun()
-
-        user_id = get_or_create_session(session, token)
+        user_id = _resolve_user_id(session)
         st.session_state["user_id"] = user_id
 
         episodes = load_episodes(session)
@@ -910,6 +954,8 @@ def main():
 
         # --- Sidebar ---
         st.sidebar.title("🇳🇱 Dutch News Learner")
+        st.sidebar.markdown("---")
+        _render_sidebar_auth(session)
         st.sidebar.markdown("---")
         selected_label = st.sidebar.selectbox(
             "Choose episode",
