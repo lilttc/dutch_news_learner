@@ -177,7 +177,8 @@ class UserVocabulary(Base):
 
     Lets learners mark words and filter out known vocabulary to focus on
     what they're still learning. user_id=1 is legacy (shared); user_id>=2
-    are anonymous sessions (Phase 6E).
+    are anonymous sessions (Phase 6E). user_sentence: optional learner note
+    for export (Anki, CSV).
     """
 
     __tablename__ = "user_vocabulary"
@@ -190,6 +191,8 @@ class UserVocabulary(Base):
     status = Column(
         String(20), nullable=False, default="new", index=True
     )  # "new", "learning", "known"
+    # Learner-written example sentence (export / Anki); optional
+    user_sentence = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -386,6 +389,8 @@ def _migrate_schema(engine):
             # Postgres: create sequence starting at 1000000 for users
             """CREATE SEQUENCE IF NOT EXISTS users_id_seq START 1000000""",
             """ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_id_seq')""",
+            # Vocab export: optional learner sentence per user per word
+            _pg_add_column("user_vocabulary", "user_sentence", "TEXT"),
         ]
     else:
         migrations = [
@@ -423,6 +428,7 @@ def _migrate_schema(engine):
             "CREATE INDEX IF NOT EXISTS ix_users_email ON users(email)",
             # SQLite: insert placeholder so next id is 1000000 (AUTOINCREMENT uses max+1)
             "INSERT OR IGNORE INTO users (id, email, password_hash, created_at) VALUES (999999, '__internal_seed_6f__', '', datetime('now'))",
+            "ALTER TABLE user_vocabulary ADD COLUMN user_sentence TEXT",
         ]
 
     for sql in migrations:
