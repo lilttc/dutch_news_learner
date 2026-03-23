@@ -1,10 +1,6 @@
 # Dutch News Learner TODO
 
-<<<<<<< Updated upstream
 **Last Updated:** 2026-03-20
-=======
-**Last Updated:** 2026-03-23
->>>>>>> Stashed changes
 
 ---
 
@@ -136,11 +132,7 @@ Phase 6E (anonymous sessions) implemented. Preferred UX: Phase 6F (email auth) �
 Posted on r/learndutch; received positive feedback + concrete bug reports. See `docs/REDDIT_RESPONSE_GUIDE.md` for response drafts.
 
 - [x] **Related reading: missing spaces** (Aandeelhouder) — Fixed in `fix_concatenated_spaces()` (Streamlit + Next.js).
-<<<<<<< Updated upstream
-- [ ] **Vocabulary status buttons: page freeze** (Aandeelhouder) — Clicking learning/known causes UI to freeze. Deferred to tomorrow. Caused by `st.rerun()` after each status change; optimize (e.g. batch updates, loading state, or defer full rerun).
-=======
 - [x] **Vocabulary status buttons: page freeze** (Aandeelhouder) — Addressed: `@st.fragment` + `on_click` + scoped status query (Mar 2026). Re-open if regressions on Streamlit Cloud.
->>>>>>> Stashed changes
 - [ ] **Mobile/Android: empty page** (Humoer) — Streamlit shows empty page on Android browsers. Investigate Streamlit mobile compatibility; consider fallback message or PWA.
 - [x] **Filter UX: radio button** (anyalitica) — Replaced checkbox with radio: "Hide known" | "Show all" (Streamlit + Next.js).
 
@@ -286,22 +278,41 @@ Merge to main when polished.
 - [ ] "Listen first, reveal later" mode — hide transcript by default
 - [ ] Difficulty labels per episode (CEFR or frequency-based)
 
-<<<<<<< Updated upstream
-=======
-### Next step: Vocabulary export + learner sentence (proposed)
+### Vocabulary export + learner notes (`feat/vocab-export-learner-notes`)
 
-High value for active learners: export words with definitions and examples, optional personal sentence per word (e.g. for Anki / spreadsheet review).
+High value for active learners: personal sentence/notes per word, then browse and export for spreadsheet or Anki-style review.
 
-- [ ] **Schema** — Add nullable `user_sentence` (or `learner_note`) on `user_vocabulary` (per user + vocabulary_id); migration in `_migrate_schema`
-- [ ] **API** — `PATCH /api/vocabulary/{id}/note` or extend status body; `GET /api/vocabulary/export?status=known|learning|new|all` → CSV or JSON (columns: lemma, pos, status, meaning_nl, meaning_en, episode_example, user_sentence, optional episode_id/title)
-- [ ] **Streamlit** — In vocabulary expander: short text area for “My sentence”; “Download CSV” with status filter (reuse export query or `pandas`/stdlib CSV)
-- [ ] **Next.js** — Same UX: note field + export button (logged-in / token users)
-- [ ] **Definition / sentence source** — Join `VocabularyItem` + dictionary; episode example: pick one from `EpisodeVocabulary.example_sentence` (latest or first seen) or leave blank when aggregated across episodes
-- [ ] **Later** — Dedicated “My vocabulary” page, Anki `.apkg` export (see UX table: Export to Anki)
+#### Done
+- [x] **Schema** — Nullable `user_sentence` on `user_vocabulary`; migration in `_migrate_schema` (Postgres + SQLite)
+- [x] **API** — `PATCH /api/vocabulary/{id}/note` (required body field `user_sentence`, null/`""` clears, max 2000 chars); `user_sentence` on `GET /vocabulary/status` and `PUT .../status` response
+- [x] **Streamlit (episode page)** — Vocabulary expander: learner note text area + **Save note**; caption encourages own sentence/notes (export later)
 
-**Suggested branch:** `feat/vocab-export-learner-notes`
+#### Remaining — API export (foundation) ✅ DONE (commit: GET /vocabulary/export)
+- [x] **`GET /api/vocabulary/export`** — Query params: `status` (`new` \| `learning` \| `known` \| `all`), optional `has_note`, `format` (`csv` \| `json`, query name `format`)
+- [x] **Column selection** — `columns=comma,separated` allow-list; defaults documented in OpenAPI
+- [x] **Row data / joins** — `UserVocabulary` + `VocabularyItem` + dictionary NL/EN; **episode example** = row from **latest episode by `published_at`** (see endpoint docstring)
+- [x] **Anki-shaped export** — `template=anki` → `Front` / `Back` / `Tags`; see `docs/ANKI_IMPORT.md`
+- [x] **Auth** — `get_user_id` (Bearer / `X-Session-Token` / legacy)
 
->>>>>>> Stashed changes
+#### Remaining — “My vocabulary” personal page (Streamlit first)
+- [ ] **New page or section** — e.g. sidebar “My vocabulary”: table of all words for current user (lemma, status, definitions, example, **user sentence**, etc.)
+- [ ] **Filters** — Status (new / learning / known / all); search by lemma; optional **has my note** / **missing note**
+- [ ] **Column visibility** — Toggles for: lemma, POS, status, definition (NL), English, episode example, **user sentence**, (optional) last seen episode — match exportable fields where possible
+- [ ] **Export actions** — Buttons: **Download CSV** (and/or Excel — `.xlsx` via `openpyxl` *or* CSV-only v1 that opens in Excel); **Download Anki-style CSV** if separate from generic export
+- [ ] **Preview** — Show first ~10 rows + chosen columns before download (catch wrong filters)
+- [ ] **Bulk scope** — “Export rows matching current filters” vs “export selected rows” (checkbox selection = nice follow-up)
+- [ ] **Saved presets (later)** — Named column sets, e.g. “Minimal Anki” vs “Full sheet”
+
+#### Remaining — Next.js (defer after Streamlit)
+- [ ] **Episode vocabulary tab** — Note field + save via `PATCH .../note` (reuse API)
+- [ ] **Personal / my vocabulary page** — Same concepts as Streamlit: filters, columns, export (or link to download from API)
+
+#### Later / optional
+- [ ] **Native Anki `.apkg`** — Only if CSV import is not enough; higher effort
+- [ ] **Cross-episode stats** — e.g. “seen in N episodes” on personal table (separate small feature)
+
+**Branch:** `feat/vocab-export-learner-notes`
+
 ---
 
 ## Phase 7: AI Features
@@ -321,18 +332,14 @@ High value for active learners: export words with definitions and examples, opti
 | ~~Separable verb detection (aanvallen, opbellen)~~ | Critical | Medium | ✅ Done (SeparableVerbRecombiner) |
 | ~~Video-subtitle sync (click timestamp → seek video)~~ | High | Medium | ✅ Done (postMessage API) |
 | Related reading: fix missing spaces in snippets | High | Small | Reddit bug |
-<<<<<<< Updated upstream
-| Vocabulary status: fix freeze on click | High | Medium | Reddit bug |
-=======
 | ~~Vocabulary status: fix freeze on click~~ | High | Medium | ✅ Streamlit fragment + on_click (Mar 2026) |
->>>>>>> Stashed changes
 | Mobile/Android: empty page | Medium | TBD | Reddit bug |
 | Transcript auto-scroll with video playback | High | High | |
 | Episode progress indicator ("12 new words") | High | Small | |
 | Pronunciation audio (Forvo / Web Speech API) | Medium | Small | |
 | Transcript search within episode | Medium | Small | |
 | Keyboard shortcuts (arrow keys for episodes, space for play) | Medium | Small | |
-| Export to Anki | Medium | Medium | |
+| Export to Anki / spreadsheet | Medium | Medium | In progress — see **Vocabulary export + learner notes** (CSV + Anki-shaped export; personal page) |
 | Word frequency across episodes ("seen in 6 episodes") | Medium | Medium | |
 | Error boundary for failed API calls (Next.js) | Medium | Small | |
 | Loading states / skeleton UI (Next.js) | Medium | Small | |
