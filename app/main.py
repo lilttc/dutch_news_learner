@@ -25,6 +25,7 @@ import streamlit as st
 from sqlalchemy.orm import joinedload
 
 from src.api.auth import hash_password, verify_password
+from src.api.routes.vocabulary import USER_SENTENCE_MAX_LEN
 from src.api.session import get_or_create_session
 from src.dictionary import get_lookup
 from src.models import (
@@ -111,8 +112,13 @@ def load_user_vocab_statuses(session, user_id=1):
     return {row.vocabulary_id: row.status for row in rows}
 
 
-def load_user_vocab_statuses_for_ids(session, user_id, vocabulary_ids):
-    """Load statuses only for given vocabulary ids (faster on fragment rerun)."""
+def load_user_vocab_for_ids(session, user_id, vocabulary_ids):
+    """
+    Load UserVocabulary rows for the given ids.
+
+    Returns:
+        dict[vocabulary_id, (status, user_sentence)] — only ids that have a row.
+    """
     if not vocabulary_ids:
         return {}
     rows = (
@@ -121,7 +127,9 @@ def load_user_vocab_statuses_for_ids(session, user_id, vocabulary_ids):
         .filter(UserVocabulary.vocabulary_id.in_(vocabulary_ids))
         .all()
     )
-    return {row.vocabulary_id: row.status for row in rows}
+    return {
+        row.vocabulary_id: (row.status, row.user_sentence) for row in rows
+    }
 
 
 def set_vocab_status(session, vocabulary_id, status, user_id=1):
@@ -141,6 +149,36 @@ def set_vocab_status(session, vocabulary_id, status, user_id=1):
     session.commit()
 
 
+def set_vocab_user_sentence(session, vocabulary_id, user_sentence, user_id=1):
+    """
+    Set or clear the learner note for a word (None or empty clears).
+
+    Matches API behaviour: max length USER_SENTENCE_MAX_LEN.
+    """
+    if user_sentence is not None:
+        user_sentence = user_sentence.strip()
+        if not user_sentence:
+            user_sentence = None
+        elif len(user_sentence) > USER_SENTENCE_MAX_LEN:
+            user_sentence = user_sentence[:USER_SENTENCE_MAX_LEN]
+    row = (
+        session.query(UserVocabulary)
+        .filter_by(user_id=user_id, vocabulary_id=vocabulary_id)
+        .first()
+    )
+    if row:
+        row.user_sentence = user_sentence
+    else:
+        row = UserVocabulary(
+            user_id=user_id,
+            vocabulary_id=vocabulary_id,
+            status="new",
+            user_sentence=user_sentence,
+        )
+        session.add(row)
+    session.commit()
+
+
 def _persist_vocab_status_click(vocabulary_id: int, status: str, user_id: int) -> None:
     """
     Save status using a fresh DB session (for st.button on_click).
@@ -151,6 +189,19 @@ def _persist_vocab_status_click(vocabulary_id: int, status: str, user_id: int) -
     db = get_db_session()
     try:
         set_vocab_status(db, vocabulary_id, status, user_id)
+    finally:
+        db.close()
+
+
+def _persist_vocab_note_save(
+    vocabulary_id: int, user_id: int, note_key: str
+) -> None:
+    """Save learner note from session_state (for st.button on_click)."""
+    raw = st.session_state.get(note_key, "") or ""
+    text = raw.strip() or None
+    db = get_db_session()
+    try:
+        set_vocab_user_sentence(db, vocabulary_id, text, user_id)
     finally:
         db.close()
 
@@ -561,7 +612,7 @@ def _get_episode_vocab_data(episode_id: int):
 @st.fragment
 def _render_vocabulary_fragment(episode_id):
     """
-    Vocabulary list with status buttons.
+    Vocabulary list with status buttons and optional learner note per word.
 
     @st.fragment: only this block reruns on status click (fast). Transcript,
     video, and episode DB load in main() are skipped on those reruns.
@@ -579,7 +630,7 @@ def _render_vocabulary_fragment(episode_id):
     try:
         user_id = st.session_state.get("user_id", 1)
         all_ids = [row["vocabulary_id"] for row in vocab_data]
-        statuses = load_user_vocab_statuses_for_ids(session, user_id, all_ids)
+        uv_by_id = load_user_vocab_for_ids(session, user_id, all_ids)
         search_query = st.session_state.get("vocab_search", "").strip()
         sort_by = st.session_state.get("vocab_sort", "frequency")
         known_filter = st.session_state.get("vocab_known_filter", "hide")
@@ -588,8 +639,10 @@ def _render_vocabulary_fragment(episode_id):
 
         if hide_known:
             vocab_data = [
-                v for v in vocab_data
-                if statuses.get(v["vocabulary_id"], "new") != "known"
+                v
+                for v in vocab_data
+                if (uv_by_id.get(v["vocabulary_id"], (None, None))[0] or "new")
+                != "known"
             ]
         if search_query:
             q = search_query.lower()
@@ -611,7 +664,9 @@ def _render_vocabulary_fragment(episode_id):
         for v in display_vocab:
             vid = v["vocabulary_id"]
             count = v["occurrence_count"]
-            current_status = statuses.get(vid, "new")
+            uv_row = uv_by_id.get(vid)
+            current_status = uv_row[0] if uv_row else "new"
+            saved_note = (uv_row[1] if uv_row else None) or ""
             status_icon = STATUS_ICONS.get(current_status, "")
             label = f"{status_icon} **{v['lemma']}** ({v['pos']}) — {count}×" if status_icon else f"**{v['lemma']}** ({v['pos']}) — {count}×"
 
@@ -657,6 +712,28 @@ def _render_vocabulary_fragment(episode_id):
                             on_click=_persist_vocab_status_click,
                             args=(vid, status_val, user_id),
                         )
+
+                note_key = f"vocab_note_{episode_id}_{vid}"
+                if note_key not in st.session_state:
+                    st.session_state[note_key] = saved_note
+                st.caption(
+                    "Try writing your own sentence or notes about this word — "
+                    "saved for review and for export later."
+                )
+                st.text_area(
+                    "Learner note",
+                    key=note_key,
+                    max_chars=USER_SENTENCE_MAX_LEN,
+                    height=88,
+                    label_visibility="collapsed",
+                    placeholder="Write your own example using this word…",
+                )
+                st.button(
+                    "Save note",
+                    key=f"save_note_{episode_id}_{vid}",
+                    on_click=_persist_vocab_note_save,
+                    args=(vid, user_id, note_key),
+                )
 
         if total - len(display_vocab) > 0:
             st.caption(f"Showing {len(display_vocab)} of {total} words.")
