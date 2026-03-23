@@ -129,13 +129,35 @@ class VocabularyItem(Base):
         return f"<VocabularyItem(lemma='{self.lemma}', pos='{self.pos}')>"
 
 
+class AnonymousSession(Base):
+    """
+    Anonymous session for per-user vocabulary (Phase 6E).
+
+    Each visitor gets a unique token (UUID) stored in localStorage (Next.js) or
+    URL param (Streamlit). The session's id is used as user_id in UserVocabulary,
+    giving each visitor their own known/learning status without login.
+
+    Legacy: user_id=1 is reserved for shared/anonymous usage when no token.
+    New sessions receive id=2, 3, 4... (id=1 is a sentinel row).
+    """
+
+    __tablename__ = "anonymous_sessions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token = Column(String(36), unique=True, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<AnonymousSession(id={self.id}, token='{self.token[:8]}...')>"
+
+
 class UserVocabulary(Base):
     """
     Per-user vocabulary status: known, learning, or new.
 
     Lets learners mark words and filter out known vocabulary to focus on
-    what they're still learning. Currently single-user (user_id always 1);
-    will support multi-user after auth migration.
+    what they're still learning. user_id=1 is legacy (shared); user_id>=2
+    are anonymous sessions (Phase 6E).
     """
 
     __tablename__ = "user_vocabulary"
@@ -317,6 +339,22 @@ def _migrate_schema(engine):
             "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_user_id ON user_vocabulary(user_id)",
             "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_vocabulary_id ON user_vocabulary(vocabulary_id)",
             "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_status ON user_vocabulary(status)",
+            # Phase 6E: anonymous sessions for per-user vocab
+            f"""CREATE TABLE IF NOT EXISTS anonymous_sessions (
+                id {pk},
+                token VARCHAR(36) NOT NULL UNIQUE,
+                created_at TIMESTAMP
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_anonymous_sessions_token ON anonymous_sessions(token)",
+            # Reserve id=1 for legacy (user_id=1); real sessions get id=2+
+            """INSERT INTO anonymous_sessions (id, token, created_at)
+               VALUES (1, '__legacy__', NOW())
+               ON CONFLICT (id) DO NOTHING""",
+            # Ensure sequence yields id>=2 for new inserts
+            """SELECT setval(
+                pg_get_serial_sequence('anonymous_sessions', 'id'),
+                GREATEST(1, (SELECT COALESCE(MAX(id), 1) FROM anonymous_sessions))
+            )""",
         ]
     else:
         migrations = [
@@ -335,6 +373,15 @@ def _migrate_schema(engine):
             "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_user_id ON user_vocabulary(user_id)",
             "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_vocabulary_id ON user_vocabulary(vocabulary_id)",
             "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_status ON user_vocabulary(status)",
+            # Phase 6E: anonymous sessions for per-user vocab
+            f"""CREATE TABLE IF NOT EXISTS anonymous_sessions (
+                id {pk},
+                token VARCHAR(36) NOT NULL UNIQUE,
+                created_at TIMESTAMP
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_anonymous_sessions_token ON anonymous_sessions(token)",
+            # Reserve id=1 for legacy; real sessions get id=2+ (SQLite: OR IGNORE)
+            "INSERT OR IGNORE INTO anonymous_sessions (id, token, created_at) VALUES (1, '__legacy__', datetime('now'))",
         ]
 
     for sql in migrations:

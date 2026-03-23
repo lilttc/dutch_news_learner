@@ -1,6 +1,7 @@
 """Database models for Dutch News Learner"""
 
 from .db import (
+    AnonymousSession,
     Base,
     Episode,
     EpisodeVocabulary,
@@ -14,6 +15,7 @@ from .db import (
 )
 
 __all__ = [
+    "AnonymousSession",
     "Base",
     "Episode",
     "EpisodeVocabulary",
