@@ -20,7 +20,7 @@ load_dotenv()
 
 from src.models import _migrate_schema, get_engine
 
-from .routes import episodes, session, vocabulary
+from .routes import auth, episodes, session, vocabulary
 
 
 @asynccontextmanager
@@ -45,6 +45,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/api")
 app.include_router(episodes.router, prefix="/api")
 app.include_router(vocabulary.router, prefix="/api")
 app.include_router(session.router, prefix="/api")

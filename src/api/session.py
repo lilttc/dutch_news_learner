@@ -1,9 +1,7 @@
 """
-Anonymous session handling (Phase 6E).
+User resolution for per-user vocabulary (Phase 6E + 6F).
 
-Resolves X-Session-Token to user_id for per-user vocabulary. When no token
-is provided, returns 1 (legacy shared user). When a valid token is provided,
-looks up or creates an AnonymousSession and uses its id as user_id.
+Priority: Bearer token (registered user) > X-Session-Token (anonymous) > legacy (1).
 """
 
 import uuid
@@ -13,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from src.models import AnonymousSession
 
+from .auth import get_current_user_optional
 from .deps import get_db
 
 LEGACY_USER_ID = 1
@@ -47,9 +46,14 @@ def get_user_id(
     """
     FastAPI dependency: resolve request to user_id.
 
-    Reads X-Session-Token header or token query param. If missing or invalid,
-    returns LEGACY_USER_ID (1). Otherwise lookup/create session, return its id.
+    Priority: Bearer token (registered) > X-Session-Token (anonymous) > legacy (1).
     """
+    # 1. Check for authenticated user (JWT Bearer token)
+    user = get_current_user_optional(request, db)
+    if user is not None:
+        return user.id
+
+    # 2. Fall back to anonymous session (X-Session-Token)
     token = (
         request.headers.get("X-Session-Token")
         or request.query_params.get("token")
@@ -58,7 +62,6 @@ def get_user_id(
         return LEGACY_USER_ID
 
     token = token.strip()
-    # Basic UUID format validation (36 chars, hex + hyphens)
     if len(token) != 36 or token.count("-") != 4:
         return LEGACY_USER_ID
 
