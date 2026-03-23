@@ -111,6 +111,19 @@ def load_user_vocab_statuses(session, user_id=1):
     return {row.vocabulary_id: row.status for row in rows}
 
 
+def load_user_vocab_statuses_for_ids(session, user_id, vocabulary_ids):
+    """Load statuses only for given vocabulary ids (faster on fragment rerun)."""
+    if not vocabulary_ids:
+        return {}
+    rows = (
+        session.query(UserVocabulary)
+        .filter(UserVocabulary.user_id == user_id)
+        .filter(UserVocabulary.vocabulary_id.in_(vocabulary_ids))
+        .all()
+    )
+    return {row.vocabulary_id: row.status for row in rows}
+
+
 def set_vocab_status(session, vocabulary_id, status, user_id=1):
     """Set a word's status (known/learning/new) for a user."""
     row = (
@@ -126,6 +139,20 @@ def set_vocab_status(session, vocabulary_id, status, user_id=1):
         )
         session.add(row)
     session.commit()
+
+
+def _persist_vocab_status_click(vocabulary_id: int, status: str, user_id: int) -> None:
+    """
+    Save status using a fresh DB session (for st.button on_click).
+
+    Avoids fragment + if st.button() ordering bugs where the first click
+    does not reliably persist + refresh in one interaction.
+    """
+    db = get_db_session()
+    try:
+        set_vocab_status(db, vocabulary_id, status, user_id)
+    finally:
+        db.close()
 
 
 def format_timestamp(seconds):
@@ -531,13 +558,16 @@ def _get_episode_vocab_data(episode_id: int):
         session.close()
 
 
+@st.fragment
 def _render_vocabulary_fragment(episode_id):
     """
     Vocabulary list with status buttons.
 
-    Not using @st.fragment: widgets inside st.tabs() + fragment can duplicate
-    button rows (Streamlit parent container outside fragment). Full rerun on
-    click is acceptable for this block.
+    @st.fragment: only this block reruns on status click (fast). Transcript,
+    video, and episode DB load in main() are skipped on those reruns.
+
+    Stable keys on expanders/buttons (episode_id + vocabulary_id) reduce
+    duplicate-widget glitches with tabs + fragment.
     """
     if not episode_id:
         return
@@ -548,7 +578,8 @@ def _render_vocabulary_fragment(episode_id):
     session = get_db_session()
     try:
         user_id = st.session_state.get("user_id", 1)
-        statuses = load_user_vocab_statuses(session, user_id)
+        all_ids = [row["vocabulary_id"] for row in vocab_data]
+        statuses = load_user_vocab_statuses_for_ids(session, user_id, all_ids)
         search_query = st.session_state.get("vocab_search", "").strip()
         sort_by = st.session_state.get("vocab_sort", "frequency")
         known_filter = st.session_state.get("vocab_known_filter", "hide")
@@ -584,7 +615,7 @@ def _render_vocabulary_fragment(episode_id):
             status_icon = STATUS_ICONS.get(current_status, "")
             label = f"{status_icon} **{v['lemma']}** ({v['pos']}) — {count}×" if status_icon else f"**{v['lemma']}** ({v['pos']}) — {count}×"
 
-            with st.expander(label):
+            with st.expander(label, key=f"vocab_exp_{episode_id}_{vid}"):
                 dict_entry = _cached_dict_lookup(v["lemma"], v["pos"])
                 gloss_nl = v["translation"] or (dict_entry.get("gloss") if dict_entry else None)
                 gloss_en = dict_entry.get("gloss_en") if dict_entry else None
@@ -618,13 +649,14 @@ def _render_vocabulary_fragment(episode_id):
                 for i, (status_val, status_label) in enumerate(STATUS_LABELS.items()):
                     with btn_cols[i]:
                         disabled = current_status == status_val
-                        if st.button(
+                        st.button(
                             f"{'● ' if disabled else ''}{status_label}",
-                            key=f"status_{vid}_{status_val}",
+                            key=f"st_{episode_id}_{vid}_{status_val}",
                             disabled=disabled,
                             use_container_width=True,
-                        ):
-                            set_vocab_status(session, vid, status_val, user_id)
+                            on_click=_persist_vocab_status_click,
+                            args=(vid, status_val, user_id),
+                        )
 
         if total - len(display_vocab) > 0:
             st.caption(f"Showing {len(display_vocab)} of {total} words.")
