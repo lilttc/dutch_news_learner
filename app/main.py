@@ -488,6 +488,35 @@ def _cached_dict_lookup(lemma: str, pos: str | None):
     return get_lookup().lookup_with_example(lemma, pos)
 
 
+@st.cache_data(ttl=3600)
+def _get_episode_vocab_data(episode_id: int):
+    """
+    Load episode vocabulary as serializable dicts. Cached so status changes
+    skip the heavy Postgres episode load — we only reload statuses.
+    """
+    session = get_db_session()
+    try:
+        episode = load_episode_with_data(session, episode_id)
+        if not episode:
+            return []
+        vocab_list = _filter_vocab(episode.episode_vocabulary or [])
+        return [
+            {
+                "vocabulary_id": ev.vocabulary_item.id,
+                "lemma": ev.vocabulary_item.lemma,
+                "pos": ev.vocabulary_item.pos,
+                "occurrence_count": ev.occurrence_count or 0,
+                "example_sentence": ev.example_sentence,
+                "surface_forms": ev.surface_forms,
+                "example_timestamp": ev.example_timestamp,
+                "translation": ev.vocabulary_item.translation,
+            }
+            for ev in vocab_list
+        ]
+    finally:
+        session.close()
+
+
 @st.fragment
 def _render_vocabulary_fragment(episode_id):
     """
@@ -496,16 +525,13 @@ def _render_vocabulary_fragment(episode_id):
     """
     if not episode_id:
         return
-    session = get_db_session()
-    try:
-        with st.spinner("Updating…"):
-            episode = load_episode_with_data(session, episode_id)
-            if not episode:
-                return
-            vocab_list = _filter_vocab(episode.episode_vocabulary or [])
-            if not vocab_list:
-                return
+    with st.spinner("Updating…"):
+        vocab_data = _get_episode_vocab_data(episode_id)
+        if not vocab_data:
+            return
 
+        session = get_db_session()
+        try:
             statuses = load_user_vocab_statuses(session)
             search_query = st.session_state.get("vocab_search", "").strip()
             sort_by = st.session_state.get("vocab_sort", "frequency")
@@ -514,37 +540,37 @@ def _render_vocabulary_fragment(episode_id):
             show_all = st.session_state.get("vocab_show_all", False)
 
             if hide_known:
-                vocab_list = [
-                    ev for ev in vocab_list
-                    if statuses.get(ev.vocabulary_item.id, "new") != "known"
+                vocab_data = [
+                    v for v in vocab_data
+                    if statuses.get(v["vocabulary_id"], "new") != "known"
                 ]
             if search_query:
                 q = search_query.lower()
-                vocab_list = [ev for ev in vocab_list if q in ev.vocabulary_item.lemma.lower()]
+                vocab_data = [v for v in vocab_data if q in v["lemma"].lower()]
             if sort_by == "alpha":
-                vocab_list = sorted(vocab_list, key=lambda ev: ev.vocabulary_item.lemma.lower())
+                vocab_data = sorted(vocab_data, key=lambda v: v["lemma"].lower())
             else:
-                vocab_list = sorted(
-                    vocab_list,
-                    key=lambda ev: ev.occurrence_count or 0,
+                vocab_data = sorted(
+                    vocab_data,
+                    key=lambda v: v["occurrence_count"],
                     reverse=True,
                 )
 
-            total = len(vocab_list)
+            total = len(vocab_data)
             is_searching = bool(search_query)
-            display_vocab = vocab_list if (show_all or is_searching) else vocab_list[:DEFAULT_VOCAB_LIMIT]
+            display_vocab = vocab_data if (show_all or is_searching) else vocab_data[:DEFAULT_VOCAB_LIMIT]
 
             lookup = get_lookup()
-            for ev in display_vocab:
-                v = ev.vocabulary_item
-                count = ev.occurrence_count if ev.occurrence_count is not None else 0
-                current_status = statuses.get(v.id, "new")
+            for v in display_vocab:
+                vid = v["vocabulary_id"]
+                count = v["occurrence_count"]
+                current_status = statuses.get(vid, "new")
                 status_icon = STATUS_ICONS.get(current_status, "")
-                label = f"{status_icon} **{v.lemma}** ({v.pos}) — {count}×" if status_icon else f"**{v.lemma}** ({v.pos}) — {count}×"
+                label = f"{status_icon} **{v['lemma']}** ({v['pos']}) — {count}×" if status_icon else f"**{v['lemma']}** ({v['pos']}) — {count}×"
 
                 with st.expander(label):
-                    dict_entry = _cached_dict_lookup(v.lemma, v.pos)
-                    gloss_nl = v.translation or (dict_entry.get("gloss") if dict_entry else None)
+                    dict_entry = _cached_dict_lookup(v["lemma"], v["pos"])
+                    gloss_nl = v["translation"] or (dict_entry.get("gloss") if dict_entry else None)
                     gloss_en = dict_entry.get("gloss_en") if dict_entry else None
                     dict_example = dict_entry.get("example") if dict_entry else None
 
@@ -554,23 +580,23 @@ def _render_vocabulary_fragment(episode_id):
                         st.markdown(f"**English:** {gloss_en}")
                     if not gloss_nl and not gloss_en:
                         st.caption("No definition available.")
-                    links = lookup.get_links(v.lemma)
+                    links = lookup.get_links(v["lemma"])
                     link_str = " · ".join(f"[{k}]({url})" for k, url in links.items())
                     st.caption(f"**Look up:** {link_str}")
 
-                    example_to_show = dict_example or ev.example_sentence
+                    example_to_show = dict_example or v.get("example_sentence")
                     if example_to_show:
                         st.markdown(f"**Example:** *{example_to_show}*")
 
-                    if ev.surface_forms:
-                        forms = [f.strip() for f in ev.surface_forms.split("|") if f.strip()]
+                    if v.get("surface_forms"):
+                        forms = [f.strip() for f in v["surface_forms"].split("|") if f.strip()]
                         if len(forms) > 1:
                             st.markdown(f"**Forms in episode:** {', '.join(forms)}")
-                        elif forms and forms[0].lower() != v.lemma.lower():
+                        elif forms and forms[0].lower() != v["lemma"].lower():
                             st.markdown(f"**Form in episode:** {forms[0]}")
 
-                    if ev.example_timestamp is not None:
-                        st.caption(f"Timestamp: {format_timestamp(ev.example_timestamp)}")
+                    if v.get("example_timestamp") is not None:
+                        st.caption(f"Timestamp: {format_timestamp(v['example_timestamp'])}")
 
                     btn_cols = st.columns(3)
                     for i, (status_val, status_label) in enumerate(STATUS_LABELS.items()):
@@ -578,17 +604,17 @@ def _render_vocabulary_fragment(episode_id):
                             disabled = current_status == status_val
                             if st.button(
                                 f"{'● ' if disabled else ''}{status_label}",
-                                key=f"status_{v.id}_{status_val}",
+                                key=f"status_{vid}_{status_val}",
                                 disabled=disabled,
                                 use_container_width=True,
                             ):
-                                set_vocab_status(session, v.id, status_val)
+                                set_vocab_status(session, vid, status_val)
                                 # Fragment auto-reruns; no st.rerun() needed
 
             if total - len(display_vocab) > 0:
                 st.caption(f"Showing {len(display_vocab)} of {total} words.")
-    finally:
-        session.close()
+        finally:
+            session.close()
 
 
 STATUS_ICONS = {"new": "", "learning": "📖", "known": "✅"}
