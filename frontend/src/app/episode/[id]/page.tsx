@@ -1,5 +1,4 @@
-import { getEpisode } from "@/lib/api";
-import { EpisodeView } from "@/components/EpisodeView";
+import { EpisodePageClient } from "@/components/EpisodePageClient";
 
 export default async function EpisodePage({
   params,
@@ -7,7 +6,5 @@ export default async function EpisodePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const episode = await getEpisode(Number(id));
-
-  return <EpisodeView episode={episode} />;
+  return <EpisodePageClient id={Number(id)} />;
 }

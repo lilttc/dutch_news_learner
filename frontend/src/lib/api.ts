@@ -1,8 +1,46 @@
 /**
  * API client for the Dutch News Learner FastAPI backend.
+ *
+ * Anonymous sessions (Phase 6E): token stored in localStorage, sent via
+ * X-Session-Token header. GET /api/session creates/returns session.
  */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const SESSION_KEY = "dutch_news_session";
+
+let _tokenPromise: Promise<string> | null = null;
+
+/** Get or create session token. On client: fetches from API if missing. On server: returns "". */
+async function getSessionToken(): Promise<string> {
+  if (typeof window === "undefined") return "";
+  const stored = localStorage.getItem(SESSION_KEY);
+  if (stored) return stored;
+  if (!_tokenPromise) {
+    _tokenPromise = fetch(`${API_BASE}/api/session`)
+      .then((r) => r.json())
+      .then((d: { token: string }) => {
+        localStorage.setItem(SESSION_KEY, d.token);
+        return d.token;
+      });
+  }
+  return _tokenPromise;
+}
+
+async function fetchWithAuth<T>(
+  path: string,
+  options?: RequestInit
+): Promise<T> {
+  const token = await getSessionToken();
+  const headers = new Headers(options?.headers);
+  if (token) headers.set("X-Session-Token", token);
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
 
 export interface EpisodeListItem {
   id: number;
@@ -53,32 +91,29 @@ export interface EpisodeDetail {
   related_articles: Article[];
 }
 
-async function fetchJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
-}
-
 export async function getEpisodes(
   limit = 50,
   offset = 0
 ): Promise<EpisodeListItem[]> {
-  return fetchJSON(`/api/episodes?limit=${limit}&offset=${offset}`);
+  return fetchWithAuth(`/api/episodes?limit=${limit}&offset=${offset}`);
 }
 
 export async function getEpisode(id: number): Promise<EpisodeDetail> {
-  return fetchJSON(`/api/episodes/${id}`);
+  return fetchWithAuth(`/api/episodes/${id}`);
 }
 
 export async function updateVocabStatus(
   vocabularyId: number,
   status: string
 ): Promise<void> {
+  const token = await getSessionToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["X-Session-Token"] = token;
   const res = await fetch(
     `${API_BASE}/api/vocabulary/${vocabularyId}/status`,
     {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ status }),
     }
   );

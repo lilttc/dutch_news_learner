@@ -1,43 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { VocabWord } from "@/lib/api";
-
-const VOCAB_STATUS_KEY = "dutch_news_vocab_status";
-
-function loadStatusesFromStorage(): Record<number, string> {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = localStorage.getItem(VOCAB_STATUS_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, string>;
-    const result: Record<number, string> = {};
-    for (const [k, v] of Object.entries(parsed)) {
-      const id = parseInt(k, 10);
-      if (!isNaN(id) && ["new", "learning", "known"].includes(v)) {
-        result[id] = v;
-      }
-    }
-    return result;
-  } catch {
-    return {};
-  }
-}
-
-function saveStatusToStorage(vocabId: number, status: string) {
-  if (typeof window === "undefined") return;
-  try {
-    const stored = loadStatusesFromStorage();
-    if (status === "new") {
-      delete stored[vocabId];
-    } else {
-      stored[vocabId] = status;
-    }
-    localStorage.setItem(VOCAB_STATUS_KEY, JSON.stringify(stored));
-  } catch {
-    // ignore
-  }
-}
+import { useState } from "react";
+import { updateVocabStatus, type VocabWord } from "@/lib/api";
 
 const STATUS_OPTIONS = [
   { value: "new", label: "New" },
@@ -58,14 +22,6 @@ export function VocabularyList({ vocabulary }: { vocabulary: VocabWord[] }) {
     return map;
   });
   const [expanded, setExpanded] = useState<number | null>(null);
-
-  // Merge localStorage (per-user, this device) over API. localStorage wins.
-  useEffect(() => {
-    const stored = loadStatusesFromStorage();
-    if (Object.keys(stored).length > 0) {
-      setStatuses((prev) => ({ ...prev, ...stored }));
-    }
-  }, []);
 
   let filtered = vocabulary.filter((v) => {
     if (hideKnown && (statuses[v.vocabulary_id] || v.status) === "known")
@@ -89,15 +45,20 @@ export function VocabularyList({ vocabulary }: { vocabulary: VocabWord[] }) {
     showAll || isSearching ? filtered : filtered.slice(0, DEFAULT_LIMIT);
   const hiddenCount = filtered.length - display.length;
 
-  function handleStatusChange(vocabId: number, newStatus: string) {
+  async function handleStatusChange(vocabId: number, newStatus: string) {
+    const prevStatus = statuses[vocabId] ?? "new";
     setStatuses((prev) => ({ ...prev, [vocabId]: newStatus }));
-    saveStatusToStorage(vocabId, newStatus);
+    try {
+      await updateVocabStatus(vocabId, newStatus);
+    } catch {
+      setStatuses((prev) => ({ ...prev, [vocabId]: prevStatus }));
+    }
   }
 
   return (
     <div>
       <p className="mb-2 text-xs text-[var(--muted)]">
-        Status saved in this browser — yours alone, not shared with others.
+        Your progress is saved per session (this browser).
       </p>
       {/* Controls */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
