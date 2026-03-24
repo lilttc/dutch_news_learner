@@ -1,6 +1,6 @@
 # Dutch News Learner TODO
 
-**Last Updated:** 2026-03-20
+**Last Updated:** 2026-03-23
 
 ---
 
@@ -85,7 +85,7 @@ Phase 6 (Postgres + proper hosting). Not urgent — Streamlit serves well for no
 
 ---
 
-## Pick Up Here (Mar 19)
+## Pick Up Here (Mar 23)
 
 ### Phase 6A: Database Migration to Cloud Postgres ✅ DONE
 Migrated from SQLite to Neon Postgres. Pipeline and Streamlit now use `DATABASE_URL`.
@@ -266,7 +266,7 @@ Merge to main when polished.
 
 **Platform:**
 - [ ] Clickable calendar view for episode selection by date
-- [ ] Streamlit polish: welcome message, episode count, mobile UX
+- [ ] Streamlit polish: welcome message, episode count, mobile UX (partial: Mar 23 — nav + episode picker + support strip)
 - [ ] User system: email auth, per-user vocabulary (Phase 6F)
 - [ ] Phase 6E: Anonymous sessions (per-user vocab without auth; upgrade from localStorage)
 - [ ] Hosting upgrade: promote Next.js to primary, retire Streamlit
@@ -303,6 +303,12 @@ High value for active learners: personal sentence/notes per word, then browse an
 - [ ] **Bulk scope** — Row checkboxes + “export selection only” (follow-up)
 - [ ] **Saved presets (later)** — Named column sets, e.g. “Minimal Anki” vs “Full sheet”
 - [x] **Episode watch state** — `user_episode_watches` table; Streamlit **Mark episode as watched / not watched**; **My vocabulary** + `GET /vocabulary/export` filter `episode_watch=any|watched_only|unwatched_only`
+- [x] **Choose episode: hide watched** (Mar 23) — Checkbox **Hide episodes I’ve marked as watched** filters the dropdown; `st.rerun()` when watch toggled with filter on so the list stays correct
+
+#### Streamlit UX + performance (same branch, Mar 23)
+- [x] **Main-area navigation** — Horizontal **Navigate** (Episodes \| My vocabulary) in the main panel inside `@st.fragment` (Streamlit forbids fragment widgets in `st.sidebar`)
+- [x] **Faster “Mark watched”** — Nested `@st.fragment` on episode detail; `ep_watched_ui_*` session keys; `_cached_episode_sidebar_rows()` (`@st.cache_data`, ttl 120s) for lightweight episode list
+- [x] **Support strip** — Compact Episodes-only banner: **Coffee** + **Member** links ([BMC](https://buymeacoffee.com/lilttc) + [membership](https://buymeacoffee.com/lilttc/membership)); no duplicate sidebar coffee/member blocks
 
 #### Remaining — Next.js (defer after Streamlit)
 - [ ] **Episode vocabulary tab** — Note field + save via `PATCH .../note` (reuse API)
@@ -340,7 +346,7 @@ High value for active learners: personal sentence/notes per word, then browse an
 | Pronunciation audio (Forvo / Web Speech API) | Medium | Small | |
 | Transcript search within episode | Medium | Small | |
 | Keyboard shortcuts (arrow keys for episodes, space for play) | Medium | Small | |
-| Export to Anki / spreadsheet | Medium | Medium | In progress — see **Vocabulary export + learner notes** (CSV + Anki-shaped export; personal page) |
+| Export to Anki / spreadsheet | Medium | Medium | ✅ Streamlit: **My vocabulary** + CSV / Anki CSV; API `GET /vocabulary/export`; Next.js UI still deferred |
 | Word frequency across episodes ("seen in 6 episodes") | Medium | Medium | |
 | Error boundary for failed API calls (Next.js) | Medium | Small | |
 | Loading states / skeleton UI (Next.js) | Medium | Small | |

@@ -308,6 +308,12 @@ def clear_episode_watched(session, user_id: int, episode_id: int) -> None:
         session.commit()
 
 
+def load_watched_episode_ids(session, user_id: int) -> set[int]:
+    """Episode ids this user has marked as watched."""
+    rows = session.query(UserEpisodeWatch.episode_id).filter_by(user_id=user_id).all()
+    return {r[0] for r in rows}
+
+
 def _persist_episode_watched_set(episode_id: int, user_id: int) -> None:
     db = get_db_session()
     try:
@@ -315,6 +321,9 @@ def _persist_episode_watched_set(episode_id: int, user_id: int) -> None:
     finally:
         db.close()
     st.session_state[f"ep_watched_ui_{episode_id}"] = True
+    # Refresh episode list when “hide watched” is on (selectbox lives in outer fragment).
+    if st.session_state.get("episode_hide_watched"):
+        st.rerun()
 
 
 def _persist_episode_watched_clear(episode_id: int, user_id: int) -> None:
@@ -324,6 +333,8 @@ def _persist_episode_watched_clear(episode_id: int, user_id: int) -> None:
     finally:
         db.close()
     st.session_state[f"ep_watched_ui_{episode_id}"] = False
+    if st.session_state.get("episode_hide_watched"):
+        st.rerun()
 
 
 def format_timestamp(seconds):
@@ -1574,18 +1585,47 @@ def _render_main_nav_and_content() -> None:
         st.error("No episodes found. Run `python scripts/ingest_playlist.py` first.")
         st.stop()
 
+    st.checkbox(
+        "Hide episodes I’ve marked as watched",
+        value=False,
+        key="episode_hide_watched",
+        help="Narrows the list to episodes you have not marked as watched yet.",
+    )
+    hide_watched = st.session_state.get("episode_hide_watched", False)
+
+    list_session = get_db_session()
+    try:
+        watched_ids = load_watched_episode_ids(list_session, user_id)
+    finally:
+        list_session.close()
+
+    display_rows = (
+        [r for r in ep_rows if r[0] not in watched_ids] if hide_watched else ep_rows
+    )
+
+    if hide_watched and not display_rows:
+        st.warning(
+            "Every episode is marked as watched, or none match this filter. "
+            "Turn off **Hide episodes I’ve marked as watched** to see the full list."
+        )
+        st.stop()
+
     # Sync episode selection with query params (for shareable links)
     query_episode = st.query_params.get("episode")
 
     episode_options = {
         f"{pub.strftime('%Y-%m-%d') if pub else '?'} — {(title or '')[:45]}": eid
-        for eid, title, pub in ep_rows
+        for eid, title, pub in display_rows
     }
+    option_keys = list(episode_options.keys())
+    prev_label = st.session_state.get("episode_select")
     default_index = 0
-    if query_episode:
+    if prev_label in episode_options:
+        default_index = option_keys.index(prev_label)
+    elif query_episode:
         try:
             qe = int(query_episode)
-            for i, (_, eid) in enumerate(episode_options.items()):
+            for i, eid in enumerate(episode_options.values()):
                 if eid == qe:
                     default_index = i
                     break
@@ -1594,7 +1634,7 @@ def _render_main_nav_and_content() -> None:
 
     st.selectbox(
         "Choose episode",
-        options=list(episode_options.keys()),
+        options=option_keys,
         index=default_index,
         key="episode_select",
     )
