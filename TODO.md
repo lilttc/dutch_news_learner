@@ -296,7 +296,7 @@ High value for active learners: personal sentence/notes per word, then browse an
 
 #### Remaining — “My vocabulary” personal page (Streamlit first) ✅ DONE (this commit)
 - [x] **New page or section** — Sidebar **Navigate → My vocabulary**; table via preview + downloads
-- [x] **Filters** — Status **multiselect** (subset of new / learning / known); learner note (any / with / without); **word** substring search; optional **episode publish date range** (UTC calendar day)
+- [x] **Filters** — Status **multiselect** (subset of new / learning / known); learner note (any / with / without); optional **episode publish date range** (UTC calendar day); **episode watched** filter
 - [x] **Column visibility** — `multiselect` aligned with API export columns (`src/vocab_export.py`)
 - [x] **Export actions** — **Download CSV** + **Download Anki CSV** (UTF-8 BOM); Excel = open CSV in Excel for v1
 - [x] **Preview** — First 10 rows shown before download

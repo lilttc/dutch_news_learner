@@ -144,16 +144,6 @@ def get_db_session():
     return get_session(get_db_engine())
 
 
-def load_episodes(session):
-    """Load all episodes ordered by date (newest first)."""
-    return (
-        session.query(Episode)
-        .filter(Episode.transcript_fetched == True)
-        .order_by(Episode.published_at.desc())
-        .all()
-    )
-
-
 def load_episode_with_data(session, episode_id):
     """Load one episode with subtitles and vocabulary."""
     return (
@@ -165,6 +155,26 @@ def load_episode_with_data(session, episode_id):
         .filter(Episode.id == episode_id)
         .first()
     )
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _cached_episode_sidebar_rows():
+    """
+    Lightweight episode list for the sidebar (id, title, published_at).
+
+    Cached briefly so marking an episode watched (fragment rerun) skips this query.
+    """
+    s = get_db_session()
+    try:
+        rows = (
+            s.query(Episode.id, Episode.title, Episode.published_at)
+            .filter(Episode.transcript_fetched == True)  # noqa: E712
+            .order_by(Episode.published_at.desc())
+            .all()
+        )
+        return [(r.id, r.title, r.published_at) for r in rows]
+    finally:
+        s.close()
 
 
 def load_user_vocab_statuses(session, user_id=1):
@@ -301,6 +311,7 @@ def _persist_episode_watched_set(episode_id: int, user_id: int) -> None:
         set_episode_watched(db, user_id, episode_id)
     finally:
         db.close()
+    st.session_state[f"ep_watched_ui_{episode_id}"] = True
 
 
 def _persist_episode_watched_clear(episode_id: int, user_id: int) -> None:
@@ -309,6 +320,7 @@ def _persist_episode_watched_clear(episode_id: int, user_id: int) -> None:
         clear_episode_watched(db, user_id, episode_id)
     finally:
         db.close()
+    st.session_state[f"ep_watched_ui_{episode_id}"] = False
 
 
 def format_timestamp(seconds):
@@ -902,7 +914,7 @@ def _render_vocabulary_fragment(episode_id):
                             f"{'● ' if disabled else ''}{status_label}",
                             key=f"st_{episode_id}_{vid}_{status_val}",
                             disabled=disabled,
-                            use_container_width=True,
+                            width="stretch",
                             on_click=_persist_vocab_status_click,
                             args=(vid, status_val, user_id),
                         )
@@ -1032,7 +1044,7 @@ def render_vocabulary(episode_vocab_list, session=None, statuses=None,
                             f"{'● ' if disabled else ''}{status_label}",
                             key=f"status_{v.id}_{status_val}",
                             disabled=disabled,
-                            use_container_width=True,
+                            width="stretch",
                         ):
                             set_vocab_status(session, v.id, status_val)
                             st.rerun()
@@ -1232,7 +1244,7 @@ def _render_my_vocabulary_page(session, user_id: int) -> None:
         "For Anki, use **Download Anki CSV** and see `docs/ANKI_IMPORT.md`."
     )
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     with c1:
         status_sel = st.multiselect(
             "Status (include any of)",
@@ -1255,12 +1267,6 @@ def _render_my_vocabulary_page(session, user_id: int) -> None:
                 "without_note": "Without note",
             }[x],
             key="mv_note_filter",
-        )
-    with c3:
-        st.text_input(
-            "Search word",
-            key="mv_search",
-            placeholder="Substring in word (headword)",
         )
 
     if not status_sel:
@@ -1329,15 +1335,9 @@ def _render_my_vocabulary_page(session, user_id: int) -> None:
         episode_watch_sel,
     )
 
-    search = (st.session_state.get("mv_search") or "").strip().lower()
-    if search:
-        rows = [
-            r for r in rows if search in (r.get("lemma") or "").lower()
-        ]
-
     if not rows:
         st.info(
-            "No vocabulary matches these filters (or your search). "
+            "No vocabulary matches these filters. "
             "Open an episode → **Vocabulary** tab to set status or save a note."
         )
         return
@@ -1360,7 +1360,7 @@ def _render_my_vocabulary_page(session, user_id: int) -> None:
         {EXPORT_COLUMN_LABELS.get(k, k): v for k, v in row.items()}
         for row in display_rows[:10]
     ]
-    st.dataframe(preview_ui, use_container_width=True)
+    st.dataframe(preview_ui, width="stretch")
     st.caption(f"**{len(rows)}** row(s) match — downloads include all of them.")
 
     csv_body = _streamlit_export_rows_to_csv(
@@ -1442,102 +1442,63 @@ def _render_sidebar_auth(session):
                         st.rerun()
 
 
-def main():
+@st.fragment
+def _render_episode_detail_fragment(user_id: int) -> None:
+    """
+    Episode body (title, watch buttons, video, tabs).
+
+    Wrapped in @st.fragment so "Mark watched" reruns only this block, not sidebar/auth/My vocabulary setup.
+    """
+    idmap = st.session_state.get("_episode_label_to_id")
+    lid = st.session_state.get("episode_select")
+    if not idmap or lid is None or lid not in idmap:
+        st.error("Episode selection unavailable. Refresh the page.")
+        return
+
+    eid = idmap[lid]
+
     session = get_db_session()
     try:
-        user_id = _resolve_user_id(session)
-        st.session_state["user_id"] = user_id
-        _apply_vocab_status_from_query(session, user_id)
+        wk = f"ep_watched_ui_{eid}"
+        if wk not in st.session_state:
+            st.session_state[wk] = is_episode_watched(session, user_id, eid)
 
-        # --- Sidebar ---
-        st.sidebar.title("🇳🇱 Dutch News Learner")
-        st.sidebar.markdown("---")
-        _render_sidebar_auth(session)
-        st.sidebar.markdown("---")
-        nav = st.sidebar.radio(
-            "Navigate",
-            ["Episodes", "My vocabulary"],
-            key="main_nav",
-        )
-
-        if nav == "My vocabulary":
-            _render_sidebar_footer()
-            _render_my_vocabulary_page(session, user_id)
-            return
-
-        episodes = load_episodes(session)
-
-        if not episodes:
-            st.error("No episodes found. Run `python scripts/ingest_playlist.py` first.")
-            st.stop()
-
-        # Sync episode selection with query params (for shareable links)
-        query_episode = st.query_params.get("episode")
-
-        episode_options = {
-            f"{ep.published_at.strftime('%Y-%m-%d') if ep.published_at else '?'} — {ep.title[:45]}": ep.id
-            for ep in episodes
-        }
-        default_index = 0
-        if query_episode:
-            try:
-                qe = int(query_episode)
-                for i, (_, eid) in enumerate(episode_options.items()):
-                    if eid == qe:
-                        default_index = i
-                        break
-            except ValueError:
-                pass
-
-        selected_label = st.sidebar.selectbox(
-            "Choose episode",
-            options=list(episode_options.keys()),
-            index=default_index,
-            key="episode_select",
-        )
-        selected_id = episode_options[selected_label]
-        _render_sidebar_footer()
-
-        # --- Load episode data ---
-        episode = load_episode_with_data(session, selected_id)
+        episode = load_episode_with_data(session, eid)
         if not episode:
             st.error("Episode not found.")
-            st.stop()
+            return
 
+        ep_watched = st.session_state[wk]
         vocab_list = _filter_vocab(episode.episode_vocabulary or [])
 
-        # --- Header: title + date ---
         st.title(episode.title)
         if episode.published_at:
             st.caption(episode.published_at.strftime("%A, %B %d, %Y"))
 
-        ep_watched = is_episode_watched(session, user_id, selected_id)
         if ep_watched:
             st.caption("✓ You marked this episode as **watched**.")
         w1, w2 = st.columns(2)
         with w1:
             st.button(
                 "Mark episode as watched",
-                key=f"ep_watch_set_{selected_id}",
+                key=f"ep_watch_set_{eid}",
                 disabled=ep_watched,
-                use_container_width=True,
+                width="stretch",
                 on_click=_persist_episode_watched_set,
-                args=(selected_id, user_id),
+                args=(eid, user_id),
             )
         with w2:
             st.button(
                 "Mark as not watched",
-                key=f"ep_watch_clear_{selected_id}",
+                key=f"ep_watch_clear_{eid}",
                 disabled=not ep_watched,
-                use_container_width=True,
+                width="stretch",
                 on_click=_persist_episode_watched_clear,
-                args=(selected_id, user_id),
+                args=(eid, user_id),
             )
 
-        # --- Video (always visible) ---
         render_video(episode.video_id)
 
-        # --- Tabbed content below the video ---
         tab_transcript, tab_vocabulary, tab_reading = st.tabs([
             "📝 Transcript",
             f"📚 Vocabulary ({len(vocab_list)})",
@@ -1548,10 +1509,98 @@ def main():
             _render_tab_transcript(episode, vocab_list, session, user_id)
 
         with tab_vocabulary:
-            _render_tab_vocabulary(vocab_list, session, episode_id=selected_id)
+            _render_tab_vocabulary(vocab_list, session, episode_id=eid)
 
         with tab_reading:
             _render_tab_related_reading(episode)
+    finally:
+        session.close()
+
+
+@st.fragment
+def _render_main_nav_and_content() -> None:
+    """
+    Main-area navigation + page content inside a fragment.
+
+    Streamlit does not allow fragments to add widgets to st.sidebar, so **Navigate**
+    and **Choose episode** live here. Switching pages/episodes then skips auth and
+    user resolution in main(). Episode “Mark watched” uses a nested fragment.
+    """
+    user_id = st.session_state.get("user_id")
+    if user_id is None:
+        st.error("Session not ready. Refresh the page.")
+        return
+
+    nav = st.radio(
+        "Navigate",
+        ["Episodes", "My vocabulary"],
+        horizontal=True,
+        key="main_nav",
+    )
+
+    if nav == "My vocabulary":
+        _render_my_vocabulary_page_from_fragment(user_id)
+        return
+
+    ep_rows = _cached_episode_sidebar_rows()
+
+    if not ep_rows:
+        st.error("No episodes found. Run `python scripts/ingest_playlist.py` first.")
+        st.stop()
+
+    # Sync episode selection with query params (for shareable links)
+    query_episode = st.query_params.get("episode")
+
+    episode_options = {
+        f"{pub.strftime('%Y-%m-%d') if pub else '?'} — {(title or '')[:45]}": eid
+        for eid, title, pub in ep_rows
+    }
+    default_index = 0
+    if query_episode:
+        try:
+            qe = int(query_episode)
+            for i, (_, eid) in enumerate(episode_options.items()):
+                if eid == qe:
+                    default_index = i
+                    break
+        except ValueError:
+            pass
+
+    st.selectbox(
+        "Choose episode",
+        options=list(episode_options.keys()),
+        index=default_index,
+        key="episode_select",
+    )
+    st.session_state["_episode_label_to_id"] = episode_options
+
+    _render_episode_detail_fragment(user_id)
+
+
+def _render_my_vocabulary_page_from_fragment(user_id: int) -> None:
+    """Open a DB session for My vocabulary (fragment reruns may not run main())."""
+    mv_session = get_db_session()
+    try:
+        _render_my_vocabulary_page(mv_session, user_id)
+    finally:
+        mv_session.close()
+
+
+def main():
+    session = get_db_session()
+    try:
+        user_id = _resolve_user_id(session)
+        st.session_state["user_id"] = user_id
+        _apply_vocab_status_from_query(session, user_id)
+
+        st.sidebar.title("🇳🇱 Dutch News Learner")
+        st.sidebar.markdown("---")
+        _render_sidebar_auth(session)
+        st.sidebar.markdown("---")
+        _render_sidebar_footer()
+        st.sidebar.caption("Switch **Episodes** / **My vocabulary** at the top of the page →")
+
+        _render_main_nav_and_content()
     finally:
         session.close()
 
