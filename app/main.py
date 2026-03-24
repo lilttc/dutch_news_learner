@@ -50,6 +50,9 @@ from src.models import (
     get_session,
 )
 
+BUY_ME_A_COFFEE_URL = "https://buymeacoffee.com/lilttc"
+BUY_ME_A_COFFEE_MEMBERSHIP_URL = "https://buymeacoffee.com/lilttc/membership"
+
 
 def _streamlit_build_export_rows(
     session,
@@ -1230,10 +1233,30 @@ def _resolve_user_id(session):
     return get_or_create_session(session, token)
 
 
-def _render_sidebar_footer():
-    st.sidebar.markdown("---")
-    st.sidebar.caption("Drie onderwerpen in makkelijke taal")
-    st.sidebar.markdown("[☕ Buy me a coffee](https://buymeacoffee.com/lilttc)")
+def _render_support_banner_main() -> None:
+    """Compact support strip: coffee + membership, minimal vertical space."""
+    html = f"""
+<div style="background:linear-gradient(135deg,#fff9f0 0%,#ffe8cc 100%);
+border-radius:10px;padding:8px 12px;margin:0 0 8px 0;
+border:1px solid #e8cfa0;box-shadow:0 1px 4px rgba(0,0,0,0.05);
+display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;line-height:1.35;">
+<span style="font-size:0.92rem;color:#333;">
+<span style="font-size:1.05rem;">🐻‍❄️</span>
+<strong>Enjoying the app?</strong>
+<span style="color:#555;">A coffee or membership helps keep it running — thank you! ✨</span>
+</span>
+<span style="display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;">
+<a href="{BUY_ME_A_COFFEE_URL}" target="_blank" rel="noopener noreferrer"
+style="display:inline-block;background:#FFDD00;color:#000 !important;font-weight:700;
+padding:6px 12px;border-radius:999px;text-decoration:none;font-size:0.88rem;">☕ Coffee</a>
+<a href="{BUY_ME_A_COFFEE_MEMBERSHIP_URL}" target="_blank" rel="noopener noreferrer"
+style="display:inline-block;border:1px solid #c9a227;background:#fff;color:#1f4fa3 !important;
+font-weight:600;padding:6px 12px;border-radius:999px;text-decoration:none;font-size:0.88rem;">
+Member</a>
+</span>
+</div>
+""".strip()
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def _render_my_vocabulary_page(session, user_id: int) -> None:
@@ -1542,6 +1565,9 @@ def _render_main_nav_and_content() -> None:
         _render_my_vocabulary_page_from_fragment(user_id)
         return
 
+    # Support strip only on Episodes (compact; keeps My vocabulary and video higher)
+    _render_support_banner_main()
+
     ep_rows = _cached_episode_sidebar_rows()
 
     if not ep_rows:
@@ -1597,7 +1623,6 @@ def main():
         st.sidebar.markdown("---")
         _render_sidebar_auth(session)
         st.sidebar.markdown("---")
-        _render_sidebar_footer()
         st.sidebar.caption("Switch **Episodes** / **My vocabulary** at the top of the page →")
 
         _render_main_nav_and_content()
