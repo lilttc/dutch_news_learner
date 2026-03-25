@@ -1,0 +1,2 @@
+# Shell scripts must use LF so Linux/cron/bash on VPS runs them correctly
+*.sh text eol=lf
