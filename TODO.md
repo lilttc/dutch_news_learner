@@ -1,6 +1,6 @@
 # Dutch News Learner TODO
 
-**Last Updated:** 2026-03-25
+**Last Updated:** 2026-03-26
 
 ---
 
@@ -81,7 +81,40 @@
 
 **Next.js:** deployed, useful as a demo / portfolio frontend, but **not** the main product right now. Promoting it to primary would require better backend hosting and more maintenance, which is hard to justify while the project is hobby-funded.
 
-**Engineering priority:** Hardening the system for the existing Streamlit user base: auth/session safety, Alembic + tests, cheap VPS-based ingestion, and Streamlit reliability / mobile UX. That work improves the project regardless of whether Next.js stays secondary long-term.
+**Engineering priority:** Hardening for the Streamlit user base: auth/session safety, Alembic + tests, **reliable scheduled ingestion** (see **Handover: scheduled pipeline** below — VPS blocked for transcripts; **WSL/home cron** is the current path), Streamlit reliability / mobile UX.
+
+---
+
+## Handover: scheduled pipeline (Mar 2026)
+
+**For the next person:** this section summarizes what we learned and what is running today.
+
+### YouTube / IP (why the VPS path stalled)
+
+- **Playlist metadata** uses **YouTube Data API v3** (`YOUTUBE_API_KEY`) — usually fine from a VPS.
+- **Transcripts** use **`youtube_transcript_api`** (unofficial) — **often blocked or throttled from datacenter IPs** (seen on Vultr Amsterdam). Home/residential egress typically works.
+- **Implication:** A cheap EU VPS is **not** a reliable host for **full** `ingest_playlist.py` unless you add a **residential proxy** (cost + code/env) or change how captions are fetched.
+
+### What runs today (owner machine)
+
+- **WSL Ubuntu** + user **`crontab`**: weekdays **18:00** with **`CRON_TZ=Europe/Amsterdam`** (same line pattern as before: `cd` → `source .venv` → `source .env` → `check_episode_needed.py` → if `true`, `run_pipeline.sh` → **`logs/pipeline.log`**).
+- **Cron must be running:** `/etc/wsl.conf` has a single **`[boot]`** block with **`systemd=true`** and **`command = "systemctl start cron"`**. After a Windows reboot, WSL starts systemd/cron when the distro starts; **PC must be awake** and **not sleeping** at run time.
+- **If jobs never fire at “6 pm”:** Ubuntu cron often uses **UTC** and may **ignore** `CRON_TZ` — try **`0 17`** instead of **`0 18`** for **18:00 CET** (winter), or **`0 16`** for **CEST**. Confirm with `grep CRON /var/log/syslog` (inside WSL) or `journalctl -u cron`.
+- **`NEED=false`:** cron still runs the **check**; **`run_pipeline.sh`** is skipped — **`pipeline.log`** may not grow; that is normal.
+
+### Repo / server gotchas (save future debugging)
+
+- **`scripts/run_pipeline.sh`:** must be **LF** line endings. Repo has **`.gitattributes`**: `*.sh text eol=lf`. If bash reports `$'\r': command not found`, run: `sed -i 's/\r$//' scripts/run_pipeline.sh`.
+- **Ubuntu minimal images:** install **`python3.12-venv`** (or matching `python3-venv`) before **`python3 -m venv .venv`**.
+- **`.env` and bash:** one assignment per line, **single-quoted** values: `OPENAI_API_KEY='sk-...'` — prevents “command not found” on `source .env`.
+
+### VPS / billing
+
+- **Vultr (or similar):** **Destroy** the instance to stop charges; **powered off** still bills. Keep the account if you might try again later (e.g. proxy, or **enrichment-only** jobs that never call transcript APIs).
+
+### GitHub Actions
+
+- If **WSL (or home) cron** owns ingestion, **disable or narrow** the **scheduled** `daily_pipeline.yml` job so Neon is not updated **twice** from two schedulers. CI/tests workflows stay as-is.
 
 ---
 
@@ -91,16 +124,16 @@ Goal: move from **solid prototype** to **small production system** — daily ing
 
 **Principles**
 
-- **Ingestion host:** Prefer a small **always-on EU VPS** (NL or nearby) with `cron` over **GitHub-hosted Actions** for the live pipeline (shared IPs, geo, and scheduler quirks hurt reliability). **Do not rely on your laptop** for schedules; VPS `cron` is fine — “local” means *developer machine*, not “no cron anywhere.”
+- **Ingestion host (updated Mar 2026):** **Transcript fetching** (`youtube_transcript_api`) **often fails from datacenter VPS IPs**; playlist API is usually OK. **Preferred for a reliable full pipeline without extra cost:** **`cron` on a machine with residential IP** (e.g. **WSL on your PC** when it is on at the scheduled time). **EU VPS** remains attractive for **non–YouTube-transcript** work or if you adopt a **residential proxy** / different caption strategy. **GitHub-hosted Actions** for live ingest: still optional/backup (IP/geo); use for **tests/deploy** primarily.
 - **GitHub Actions:** Use for **tests, lint, deploys**, and optionally **DB migrations** — not as the long-term owner of ingestion unless you revisit with self-hosted runners or VPN (see Phase 6D).
-- **Ship order:** Do **not** block production ingestion on a full **job queue** (`ingestion_jobs`, `SKIP LOCKED`, etc.). Run **`check_episode_needed.py` + `scripts/run_pipeline.sh`** on the VPS first; add queue tables, locking, and retries only when monolithic runs hurt (failures, overlap, observability).
+- **Ship order:** Do **not** block production ingestion on a full **job queue** (`ingestion_jobs`, `SKIP LOCKED`, etc.). Run **`check_episode_needed.py` + `scripts/run_pipeline.sh`** on a **reliable host** (today: **WSL/home cron**; VPS only once transcript IP/proxy is solved); add queue tables, locking, and retries only when monolithic runs hurt (failures, overlap, observability).
 - **Alembic:** Treat as a **process change**, not only a library — migrations run in deploy/CI **before** new code expects new schema; avoid mutating schema silently on every API boot (`src/api/main.py` + `_migrate_schema` should shrink over time).
 
 **Concrete order of work**
 
 1. **Auth / session safety** — Mandatory `SECRET_KEY` (no dev default in production); remove risky **fallback-to-legacy** on anonymous session errors (`src/api/session.py`); DB **unique** constraint on `(user_id, vocabulary_id)`; tighten `.env.example`; stop swallowing unexpected errors in `_migrate_schema`.
 2. **Migrations + tests together** — Introduce **Alembic** and a **small integration test** suite (auth/session, vocab status, episode detail, export) so schema and behavior stop drifting; add `.github/workflows/test.yml` (**CI runs tests only — no live ingestion**).
-3. **VPS pipeline** — Clone repo, venv, secrets, dictionary one-time setup, Neon `DATABASE_URL`; cron: e.g. discovery/check then `run_pipeline.sh` (match your episode window).
+3. **Scheduled pipeline** — Same as today: `check_episode_needed.py` then `run_pipeline.sh` against Neon. **Host:** WSL/home `cron` (current) **or** VPS **only** if transcript IP issue is solved (proxy / alternate captions). Document timezone (UTC vs `CRON_TZ`).
 4. **Deepen worker model (later)** — `pipeline_runs` / `ingestion_jobs`, discover vs process split, `FOR UPDATE SKIP LOCKED`, retries, admin/status view — when pain justifies it.
 
 **Target architecture (when stable)**
@@ -111,7 +144,7 @@ Goal: move from **solid prototype** to **small production system** — daily ing
 | FastAPI | Serves prepared data only; no heavy NLP on request |
 | Next.js | Secondary demo / portfolio frontend unless budget + usage justify promoting it later |
 | Streamlit | Primary user app for now; optimize this path first |
-| VPS | Ingestion worker (`cron` + pipeline scripts) |
+| Home / WSL (or VPS + workaround) | Ingestion worker (`cron` + pipeline scripts); VPS alone failed transcripts in Mar 2026 trial |
 | GitHub Actions | Tests + deploy (+ optional migration step), not live ingest |
 
 **Product / architecture forks (decide before big frontend investment)**
@@ -122,6 +155,8 @@ Goal: move from **solid prototype** to **small production system** — daily ing
 ---
 
 ## Pick Up Here (Mar 23)
+
+**Ops / ingestion context (Mar 2026):** read **Handover: scheduled pipeline** above first (YouTube transcript vs VPS IP, WSL `cron`, `.gitattributes`, `.env` quoting, disable duplicate GitHub schedule).
 
 ### Phase 6A: Database Migration to Cloud Postgres ✅ DONE
 Migrated from SQLite to Neon Postgres. Pipeline and Streamlit now use `DATABASE_URL`.
@@ -138,20 +173,22 @@ Migrated from SQLite to Neon Postgres. Pipeline and Streamlit now use `DATABASE_
 - [x] **Lock contention fix** — conditional migrations, `check_locks.py`, `kill_stuck_connections.py`
 - [x] **Incremental pipeline** — each step only processes episodes needing it (default)
 
-### Phase 6B: Scheduled pipeline ✅ DONE (GitHub); preferred production: VPS
+### Phase 6B: Scheduled pipeline ✅ DONE (GitHub workflow); **production ingest: WSL cron (Mar 2026)**
 Workflow exists: GitHub Actions scheduled + manual run. See `docs/GITHUB_ACTIONS_SETUP.md`.
 
-**Near-term direction:** Treat **GitHub-hosted** scheduled runs as **optional / backup** if IP/geo blocks persist. **Preferred:** small **EU VPS** + `cron` running `check_episode_needed.py` then `run_pipeline.sh` against Neon (see **Production roadmap** above). Keep Actions for **tests/deploy** (Phase 6C).
+**Mar 2026 reality:** **Vultr EU VPS** was set up; **YouTube transcript API blocked datacenter IP** → full pipeline moved to **WSL on Windows**: user `crontab`, weekdays **18:00 Amsterdam**, `systemctl start cron` via **`wsl.conf` `[boot]`** with **`systemd=true`**. Details and ops notes: **Handover: scheduled pipeline** (top of this file).
 
 - [x] **Create `.github/workflows/daily_pipeline.yml`**
       — Python 3.11, pip cache, spaCy nl_core_news_md
       — Schedule (see workflow YAML; UTC window) + `workflow_dispatch`; `check_episode_needed.py` gate before full install/run
 - [x] **Update `run_pipeline.sh`** — check OPENAI_API_KEY from env or .env (CI-friendly)
 - [x] **README/TODO** — note automatic pipeline
+- [x] **`.gitattributes`** — `*.sh text eol=lf` so `run_pipeline.sh` works on Linux/WSL (Mar 2026)
 - [ ] **Store secrets in GitHub** — only if keeping scheduled ingest on Actions: `DATABASE_URL`, `YOUTUBE_API_KEY`, `OPENAI_API_KEY` (user action)
 - [ ] **Test** — trigger workflow manually if using Actions for ingest (user action)
-- [ ] **VPS production ingest** — provision EU (ideally NL) VPS; `cron` + check + `run_pipeline.sh`; document in runbook (user action)
-- [ ] **Disable or narrow GA schedule** — once VPS is reliable, avoid double-running pipeline (user action)
+- [x] **VPS trial** — Vultr Amsterdam, Ubuntu 24.04, venv, `.env`, cron tested; **transcript IP block** → not used for ingest (destroy instance to save cost)
+- [x] **Local WSL cron** — weekdays 18:00 Europe/Amsterdam; `logs/pipeline.log`; verify tomorrow / tune UTC hour if needed (user ongoing)
+- [ ] **Disable or narrow GA schedule** — now that WSL owns ingest, avoid double-running pipeline against Neon (user action)
 
 ### Streamlit-first priorities (actual users)
 

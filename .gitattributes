@@ -1,2 +1,2 @@
-# Shell scripts must use LF so Linux/cron/bash on VPS runs them correctly
+# Shell scripts must use LF so WSL/Linux and VPS cron/bash run them correctly
 *.sh text eol=lf
