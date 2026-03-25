@@ -269,14 +269,14 @@ GitHub Actions runners are often US-based; NOS transcripts may be geo-restricted
 ### Phase 6C: Alembic + tests + CI (ingestion not in CI)
 Bundle **schema migrations** and **tests** so behavior and DB stop drifting. **Alembic** implies a deploy habit: run migrations **before** new API code (not only implicit startup DDL).
 
-- [ ] **Add Alembic** — `alembic.ini`, `versions/`, baseline from current schema; document upgrade command for prod
+- [x] **Add Alembic** — `alembic.ini`, `alembic/env.py`, `baseline_001` empty revision; existing DBs: `alembic stamp baseline_001` once; new DDL in future revisions
 - [ ] **Move off startup DDL** — reduce `_migrate_schema` on API boot; API startup verifies DB connectivity only (align with Production roadmap)
-- [ ] **Set up pytest** — `tests/`, `pytest.ini` or `pyproject.toml`
-- [ ] **Integration tests (start here)** — `TestClient`: register/login/me, anonymous session creation, vocab status update, episode detail, export endpoint
+- [x] **Set up pytest** — `tests/`, `pytest.ini`, `requirements-dev.txt` (`pytest`, `httpx`, `alembic`)
+- [x] **Integration smoke tests** — `TestClient`: health, session, register/login/me, episodes list/404, vocab status + export JSON
 - [ ] **Unit tests: quiz generator** — question types, distractors, frequency filter, etc.
 - [ ] **Unit tests: vocabulary processing** — separable verbs, extraction edge cases
-- [ ] **DB fixtures** — test DB (SQLite or ephemeral Postgres) for isolation
-- [ ] **Create `.github/workflows/test.yml`** — push + PR; `pytest` (and optionally `alembic upgrade` against a throwaway DB in CI); **do not** run live ingestion here
+- [x] **DB isolation for tests** — temp SQLite file + env before app import (`tests/conftest.py`)
+- [x] **Create `.github/workflows/test.yml`** — push + PR; `alembic upgrade head` smoke + `pytest`; **no** live ingestion
 - [ ] **Add coverage badge to README** (optional)
 
 ### Phase 5C: Quiz System (on `quiz-improvements` branch)
