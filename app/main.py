@@ -39,6 +39,7 @@ from src.vocab_export import (
     project_export_columns,
 )
 from src.models import (
+    Base,
     Episode,
     EpisodeVocabulary,
     SubtitleSegment,
@@ -138,6 +139,7 @@ def get_db_engine():
     from src.models import _migrate_schema
 
     engine = get_engine()
+    Base.metadata.create_all(bind=engine)
     _migrate_schema(engine)
     return engine
 

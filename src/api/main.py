@@ -20,7 +20,7 @@ from sqlalchemy import text
 
 load_dotenv()
 
-from src.models import _migrate_schema, get_engine
+from src.models import Base, _migrate_schema, get_engine
 
 from .auth import ensure_jwt_configured
 from .routes import auth, episodes, session, vocabulary
@@ -30,7 +30,11 @@ _logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Verify DB connectivity, then apply idempotent schema patches.
+    """Verify DB connectivity, create missing tables, then apply idempotent patches.
+
+    ``_migrate_schema`` assumes base tables exist (it mostly ALTERs / adds tables).
+    ``init_db()`` always ran ``create_all`` first; the API must do the same so a
+    fresh SQLite file (e.g. pytest) does not fail on the first ALTER.
 
     Long-term, heavy DDL should move to Alembic and run in deploy — this startup
     path stays for compatibility until that migration exists.
@@ -42,6 +46,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         _logger.exception("Database unreachable during API startup (before schema migration)")
         raise
+    Base.metadata.create_all(bind=engine)
     _migrate_schema(engine)
     ensure_jwt_configured()
     yield
