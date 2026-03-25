@@ -1,6 +1,6 @@
 # Dutch News Learner TODO
 
-**Last Updated:** 2026-03-23
+**Last Updated:** 2026-03-25
 
 ---
 
@@ -75,13 +75,49 @@
 
 ## Current Status
 
-**Streamlit app** = primary public app (live, fast, reliable)
-**Next.js + Vercel** = staging/demo (deployed, looks great, but Render free tier has slow cold starts)
+**User-facing today:** **Streamlit** is the main public app (live on Streamlit Cloud, fast UX). **Next.js** on Vercel is deployed and polished; promoting it to *primary* for learners is still a **product choice** (see **Production roadmap** → frontend fork), not blocked only by code.
 
-The Next.js frontend is ready for production. The blocker is backend hosting:
-Render free tier spins down after 15 min → 30-50s cold starts → bad UX.
-To promote Next.js to primary: either pay $7/mo for Render Starter, or migrate to
-Phase 6 (Postgres + proper hosting). Not urgent — Streamlit serves well for now.
+**Backend:** Neon Postgres is in use (Phase 6A). **Render** free tier for FastAPI still implies cold starts (~30–50s) → poor experience if Next is the main client unless you upgrade hosting or accept the delay.
+
+**Next.js:** deployed, useful as a demo / portfolio frontend, but **not** the main product right now. Promoting it to primary would require better backend hosting and more maintenance, which is hard to justify while the project is hobby-funded.
+
+**Engineering priority:** Hardening the system for the existing Streamlit user base: auth/session safety, Alembic + tests, cheap VPS-based ingestion, and Streamlit reliability / mobile UX. That work improves the project regardless of whether Next.js stays secondary long-term.
+
+---
+
+## Production roadmap (near-term)
+
+Goal: move from **solid prototype** to **small production system** — daily ingestion without depending on a laptop, Neon Postgres as source of truth, clear separation between **serving** (API/apps) and **batch** (`scripts/*`).
+
+**Principles**
+
+- **Ingestion host:** Prefer a small **always-on EU VPS** (NL or nearby) with `cron` over **GitHub-hosted Actions** for the live pipeline (shared IPs, geo, and scheduler quirks hurt reliability). **Do not rely on your laptop** for schedules; VPS `cron` is fine — “local” means *developer machine*, not “no cron anywhere.”
+- **GitHub Actions:** Use for **tests, lint, deploys**, and optionally **DB migrations** — not as the long-term owner of ingestion unless you revisit with self-hosted runners or VPN (see Phase 6D).
+- **Ship order:** Do **not** block production ingestion on a full **job queue** (`ingestion_jobs`, `SKIP LOCKED`, etc.). Run **`check_episode_needed.py` + `scripts/run_pipeline.sh`** on the VPS first; add queue tables, locking, and retries only when monolithic runs hurt (failures, overlap, observability).
+- **Alembic:** Treat as a **process change**, not only a library — migrations run in deploy/CI **before** new code expects new schema; avoid mutating schema silently on every API boot (`src/api/main.py` + `_migrate_schema` should shrink over time).
+
+**Concrete order of work**
+
+1. **Auth / session safety** — Mandatory `SECRET_KEY` (no dev default in production); remove risky **fallback-to-legacy** on anonymous session errors (`src/api/session.py`); DB **unique** constraint on `(user_id, vocabulary_id)`; tighten `.env.example`; stop swallowing unexpected errors in `_migrate_schema`.
+2. **Migrations + tests together** — Introduce **Alembic** and a **small integration test** suite (auth/session, vocab status, episode detail, export) so schema and behavior stop drifting; add `.github/workflows/test.yml` (**CI runs tests only — no live ingestion**).
+3. **VPS pipeline** — Clone repo, venv, secrets, dictionary one-time setup, Neon `DATABASE_URL`; cron: e.g. discovery/check then `run_pipeline.sh` (match your episode window).
+4. **Deepen worker model (later)** — `pipeline_runs` / `ingestion_jobs`, discover vs process split, `FOR UPDATE SKIP LOCKED`, retries, admin/status view — when pain justifies it.
+
+**Target architecture (when stable)**
+
+| Piece | Role |
+|-------|------|
+| Neon Postgres | Source of truth |
+| FastAPI | Serves prepared data only; no heavy NLP on request |
+| Next.js | Secondary demo / portfolio frontend unless budget + usage justify promoting it later |
+| Streamlit | Primary user app for now; optimize this path first |
+| VPS | Ingestion worker (`cron` + pipeline scripts) |
+| GitHub Actions | Tests + deploy (+ optional migration step), not live ingest |
+
+**Product / architecture forks (decide before big frontend investment)**
+
+- **Frontend:** Keep **Streamlit primary** while the project is hobby-funded and the real users are there. Keep **Next.js secondary / portfolio** unless budget or usage grows enough to justify a promotion later.
+- **Anonymous → registered:** **Default recommendation: merge** anonymous `UserVocabulary` into the new account when the user registers/logs in with an optional `anonymous_token` / session header — **explicit** in UX (“we’ll attach progress to this account”) and **idempotent** (safe to call twice; define conflict rule for duplicate rows, e.g. status precedence).
 
 ---
 
@@ -102,17 +138,27 @@ Migrated from SQLite to Neon Postgres. Pipeline and Streamlit now use `DATABASE_
 - [x] **Lock contention fix** — conditional migrations, `check_locks.py`, `kill_stuck_connections.py`
 - [x] **Incremental pipeline** — each step only processes episodes needing it (default)
 
-### Phase 6B: GitHub Actions Pipeline Automation ✅ DONE
-Pipeline runs in CI via GitHub Actions. See `docs/GITHUB_ACTIONS_SETUP.md` for details.
+### Phase 6B: Scheduled pipeline ✅ DONE (GitHub); preferred production: VPS
+Workflow exists: GitHub Actions scheduled + manual run. See `docs/GITHUB_ACTIONS_SETUP.md`.
+
+**Near-term direction:** Treat **GitHub-hosted** scheduled runs as **optional / backup** if IP/geo blocks persist. **Preferred:** small **EU VPS** + `cron` running `check_episode_needed.py` then `run_pipeline.sh` against Neon (see **Production roadmap** above). Keep Actions for **tests/deploy** (Phase 6C).
 
 - [x] **Create `.github/workflows/daily_pipeline.yml`**
       — Python 3.11, pip cache, spaCy nl_core_news_md
-      — Schedule: weekdays */15 18-20 UTC, weekends 18:15 UTC
-      — Manual trigger: workflow_dispatch
+      — Schedule (see workflow YAML; UTC window) + `workflow_dispatch`; `check_episode_needed.py` gate before full install/run
 - [x] **Update `run_pipeline.sh`** — check OPENAI_API_KEY from env or .env (CI-friendly)
-- [x] **README/TODO** — note automatic pipeline, de-emphasize cron
-- [ ] **Store secrets in GitHub** — `DATABASE_URL`, `YOUTUBE_API_KEY`, `OPENAI_API_KEY` (user action)
-- [ ] **Test** — trigger workflow manually, verify new episode in app (user action)
+- [x] **README/TODO** — note automatic pipeline
+- [ ] **Store secrets in GitHub** — only if keeping scheduled ingest on Actions: `DATABASE_URL`, `YOUTUBE_API_KEY`, `OPENAI_API_KEY` (user action)
+- [ ] **Test** — trigger workflow manually if using Actions for ingest (user action)
+- [ ] **VPS production ingest** — provision EU (ideally NL) VPS; `cron` + check + `run_pipeline.sh`; document in runbook (user action)
+- [ ] **Disable or narrow GA schedule** — once VPS is reliable, avoid double-running pipeline (user action)
+
+### Streamlit-first priorities (actual users)
+
+- [ ] **Streamlit reliability pass** — focus fixes and polish on the app current users actually use
+- [ ] **Mobile/Android support** — investigate empty page bug; add fallback message or workaround if needed
+- [ ] **Streamlit ops visibility** — simple admin/status view for last pipeline run, latest episode, failed steps
+- [ ] **Keep Next.js explicitly secondary** — use for experimentation / portfolio, not as a blocking migration target
 
 ### Per-User Vocabulary — Option A (Quick Fix) ✅ DONE
 Implemented localStorage for Next.js so each visitor has their own known/learning status on their device.
@@ -121,11 +167,14 @@ Implemented localStorage for Next.js so each visitor has their own known/learnin
 - [x] **Streamlit: stays shared** — Python/server-side cannot access localStorage. Added caption directing users to Next.js for per-device storage. Streamlit Cloud remains shared (user_id=1).
 - [ ] **Reddit responses** — User action: post draft replies from `docs/REDDIT_RESPONSE_GUIDE.md`
 
-### Per-User Vocabulary — Phase 6E ✅ DONE, Phase 6F Next
-Phase 6E (anonymous sessions) implemented. Preferred UX: Phase 6F (email auth) — no need to explain sessions to users.
+### Auth & per-user vocabulary — 6E ✅ done, 6F next (one checklist)
 
-- [x] **Phase 6E: Anonymous sessions** — Token in localStorage (Next.js) or URL `?u=<token>` (Streamlit). API `X-Session-Token`, maps to user_id. UserVocabulary per-session.
-- [ ] **Phase 6F: Email auth** — Sign up with email; progress saved everywhere. See Phase 6F section below. Branch: `feat/phase-6f-email-auth`.
+**Done (6E):** Anonymous sessions — token in localStorage (Next.js) or URL `?u=<token>` (Streamlit); API `X-Session-Token` → `AnonymousSession` → `UserVocabulary` per session.
+
+**Next (6F):** Email auth + registered users — **single detailed checklist** in **Phase 6F** below (DB, FastAPI, Next.js, optional Streamlit). **Product default** for anonymous → registered: **merge** progress (explicit UX, idempotent API) — also stated under **Production roadmap** § forks; implementation tasks live in Phase 6F **Migration path**.
+
+**Near-term client bug (before or with 6F):**
+- [ ] **`frontend/src/lib/api.ts` — session bootstrap retry:** If `GET /api/session` fails, **clear `_sessionPromise`** (and handle rejection) so the next call can retry. Today a rejected promise can stay cached and force a full reload.
 
 ### Reddit Feedback — Bugs to Fix (This Week)
 
@@ -161,13 +210,9 @@ Posted on r/learndutch; received positive feedback + concrete bug reports. See `
 - Add **Mini summary** to backlog (medium impact, medium effort — LLM)
 - **Mobile UX** moved up: Streamlit polish for mobile, or document limitations
 
-### Phase 6E: Anonymous Sessions ✅ DONE
-Upgrade path from Option A (localStorage). Gives per-user vocab with persistence across visits, no login.
-Implemented — token in localStorage (Next.js) or URL param (Streamlit). UserVocabulary uses per-session user_id.
-
 ### Phase 6F: Email Auth (Per-User Vocabulary — Preferred UX)
 
-**Why:** Users shouldn't need to understand sessions (URL tokens, bookmarking, localStorage). Email signup gives a simple story: "Create account → your progress is saved everywhere." No explaining where data lives.
+**Why:** Users shouldn't need to understand sessions (URL tokens, bookmarking, localStorage). Email signup gives a simple story: "Create account → your progress is saved everywhere." No explaining where data lives. *(Phase 6E anonymous sessions are done — see **Auth & per-user vocabulary** above.)*
 
 **Branch:** `feat/phase-6f-email-auth` (create after merging `feat/phase-6e-anonymous-sessions`)
 
@@ -193,14 +238,16 @@ Implemented — token in localStorage (Next.js) or URL param (Streamlit). UserVo
 - [ ] Header: show "Log in" / "Sign up" when anonymous; show "Log out" + email when authenticated
 - [ ] Persist session: JWT in `localStorage` or HTTP-only cookie (cookie is more secure; requires API to set it)
 - [ ] Send `Authorization: Bearer <token>` on API requests when logged in; backend prefers Bearer over `X-Session-Token`
-- [ ] Migrate anonymous progress: on first login after using app anonymously, offer "Merge your progress?" — call API to copy `AnonymousSession` UserVocabulary to `User` id
+- [ ] Merge anonymous progress (default): explicit UX (“attach this device’s saved words to your account”) + idempotent API; pass anonymous token on register/login — align with **Migration path** below
 
 #### Commit 4: Streamlit auth (optional)
 - [ ] Streamlit has no native auth; options: (a) **Streamlit-Authenticator** (`pip install streamlit-authenticator`), (b) embed login in iframe and pass token via query param, (c) client-side only for Next.js; Streamlit stays anonymous with URL token
 - [ ] If supporting Streamlit auth: add login form in sidebar; store JWT in `st.session_state`; send token to API if Streamlit ever calls API directly, or keep Streamlit server-side DB access and use `User` id from session
 
 #### Migration path (anonymous → registered)
-- [ ] When user registers: optionally pass `anonymous_token` (or `X-Session-Token`) in request; backend copies `UserVocabulary` rows from anonymous user_id to new User id; delete or leave anonymous rows
+**Default product choice:** **merge** anonymous progress into the registered account — least surprising for learners. Implementation: **explicit** UX copy + **idempotent** API (safe if called twice; define one conflict rule for same `vocabulary_id`, e.g. status precedence or newest `updated_at`).
+
+- [ ] When user registers/logs in: optional `anonymous_token` (or `X-Session-Token`); backend merges `UserVocabulary` from anonymous `user_id` into registered `user.id`; idempotent merge
 - [ ] Document in README: "Sign up to save progress across devices"
 
 #### Security notes
@@ -208,9 +255,10 @@ Implemented — token in localStorage (Next.js) or URL param (Streamlit). UserVo
 - [ ] Rate-limit login/register (e.g. 5 attempts/min per IP)
 - [ ] Email verification (optional for MVP): send link to verify; mark `User.email_verified`
 
-### Phase 6D: VPN Integration for Transcript Fetch (Geo-Restriction)
-GitHub Actions runners are typically in the US; NOS transcripts may be geo-restricted.
-Integrate NordVPN in the workflow so ingest runs from a Netherlands IP.
+### Phase 6D: VPN / NL egress (only if ingest still fails by IP)
+**If** the pipeline runs on a **NL or nearby EU VPS**, VPN is often unnecessary. Reserve this for **GitHub-hosted** ingest or non-EU hosts where transcript/geo still fails.
+
+GitHub Actions runners are often US-based; NOS transcripts may be geo-restricted — VPN was one workaround.
 
 - [ ] **Add NordVPN step to workflow** — connect to NL server before ingest
 - [ ] **Store NordVPN credentials** — add `NORDVPN_SERVICE_USERNAME`, `NORDVPN_SERVICE_PASSWORD` as repo secrets (or use token-based auth if supported)
@@ -218,23 +266,18 @@ Integrate NordVPN in the workflow so ingest runs from a Netherlands IP.
 - [ ] **Test** — verify transcript fetch succeeds in CI
 - [ ] **Document** — update `docs/GITHUB_ACTIONS_SETUP.md` with VPN setup
 
-### Phase 6C: Test Suite + CI
-Add tests and run them automatically on every push/PR. Catches regressions
-before they reach prod and demonstrates CI/CD skills.
+### Phase 6C: Alembic + tests + CI (ingestion not in CI)
+Bundle **schema migrations** and **tests** so behavior and DB stop drifting. **Alembic** implies a deploy habit: run migrations **before** new API code (not only implicit startup DDL).
 
-- [ ] **Set up pytest** — `tests/` directory, `pytest.ini` or `pyproject.toml` config
-- [ ] **Unit tests: quiz generator** — question type selection, distractor picking,
-      frequency filter, masking, answer checking. Pure functions, easy to test.
-- [ ] **Unit tests: vocabulary processing** — separable verb recombination,
-      extraction with known edge cases
-- [ ] **Integration tests: FastAPI endpoints** — use `TestClient`, test episode list,
-      episode detail, quiz generate/submit, vocabulary status update
-- [ ] **DB fixtures** — in-memory SQLite for test isolation (no cloud DB needed)
-- [ ] **Create `.github/workflows/test.yml`**
-      — trigger: on push to any branch + on pull request
-      — install deps, run `pytest --cov` with coverage report
-      — fail PR if tests fail
-- [ ] **Add coverage badge to README** (optional, nice-to-have)
+- [ ] **Add Alembic** — `alembic.ini`, `versions/`, baseline from current schema; document upgrade command for prod
+- [ ] **Move off startup DDL** — reduce `_migrate_schema` on API boot; API startup verifies DB connectivity only (align with Production roadmap)
+- [ ] **Set up pytest** — `tests/`, `pytest.ini` or `pyproject.toml`
+- [ ] **Integration tests (start here)** — `TestClient`: register/login/me, anonymous session creation, vocab status update, episode detail, export endpoint
+- [ ] **Unit tests: quiz generator** — question types, distractors, frequency filter, etc.
+- [ ] **Unit tests: vocabulary processing** — separable verbs, extraction edge cases
+- [ ] **DB fixtures** — test DB (SQLite or ephemeral Postgres) for isolation
+- [ ] **Create `.github/workflows/test.yml`** — push + PR; `pytest` (and optionally `alembic upgrade` against a throwaway DB in CI); **do not** run live ingestion here
+- [ ] **Add coverage badge to README** (optional)
 
 ### Phase 5C: Quiz System (on `quiz-improvements` branch)
 Initial quiz code is on main. Improvements (frequency filter, all-MC, English
@@ -267,9 +310,8 @@ Merge to main when polished.
 **Platform:**
 - [ ] Clickable calendar view for episode selection by date
 - [ ] Streamlit polish: welcome message, episode count, mobile UX (partial: Mar 23 — nav + episode picker + support strip)
-- [ ] User system: email auth, per-user vocabulary (Phase 6F)
-- [ ] Phase 6E: Anonymous sessions (per-user vocab without auth; upgrade from localStorage)
-- [ ] Hosting upgrade: promote Next.js to primary, retire Streamlit
+- [ ] User system: email auth + merge path (Phase 6F); anonymous sessions (6E) ✅ done
+- [ ] Hosting upgrade (later): revisit whether Next.js should become primary only if budget/usage justify it
 - [ ] Analytics: Vercel Analytics, PostHog, learning event tracking
 
 **Reddit / Product Ideas (new):**
@@ -373,10 +415,10 @@ streamlit run app/main.py
 ```
 
 ### Daily Pipeline
-Runs automatically via GitHub Actions (weekdays 18:00–20:00 UTC, weekends 18:15 UTC).
+**Preferred production:** small **EU VPS** + `cron` — run `check_episode_needed.py` (optional gate) then `scripts/run_pipeline.sh` against Neon. **GitHub Actions** may still run a scheduled workflow; avoid **two** schedulers writing the same pipeline without intent.
 
 ```bash
-# Local run (incremental)
+# Local or VPS (incremental)
 bash scripts/run_pipeline.sh
 
 # Re-process all or limit
@@ -417,7 +459,7 @@ python scripts/convert_dictionary_to_sqlite.py
 | Cloud Deployment | Streamlit Cloud, Vercel, Render |
 | Performance Optimization | N+1 query fix, dictionary SQLite migration |
 | PostgreSQL (Azure/AWS) | Cloud DB migration, connection management |
-| CI/CD (GitHub Actions) | Automated daily pipeline, test suite on PR, scheduled workflows |
+| CI/CD (GitHub Actions) | Scheduled pipeline (optional/backup), tests on PR; production ingest → VPS + `cron` (see Production roadmap) |
 | Testing (pytest) | Unit + integration tests, DB fixtures, coverage |
 | dbt (potential) | Data transformation layer for quiz analytics |
 | RAG / Vector Search | Semantic episode search (Phase 7) |
@@ -526,4 +568,11 @@ python scripts/convert_dictionary_to_sqlite.py
 - **Product ideas** — Mapped to TODO: episode done + streak, mini summary, listen-first mode, difficulty labels
 - **Prioritization** — Short-run: fix bugs, respond to Reddit; long-run: episode streak, listen-first, mini summary
 - **fix/reddit-feedback branch** — Related reading spaces fix, radio button filter
-- **Per-user vocab (Option A)** — localStorage for Next.js (per-device); Streamlit stays shared with caption. Future: Phase 6E anonymous sessions.
+- **Per-user vocab (Option A)** — localStorage for Next.js (per-device); Streamlit stays shared with caption. Superseded for API-backed vocab by Phase 6E (anonymous sessions) ✅.
+
+### Mar 24, 2026
+- **Production roadmap** — Added section: VPS-first daily ingest vs GitHub-hosted Actions; ship order (auth/session safety → Alembic + tests → VPS cron → job queue later); Alembic as deploy process; Next vs Streamlit fork; anonymous→registered **merge** default (explicit + idempotent). Phase 6B/6C/6D and Quick Reference aligned.
+
+### Mar 25, 2026
+- **TODO hygiene** — **Current Status** aligned with Production roadmap (user-facing today vs engineering priority). **Auth section** deduped (one 6E→6F summary + Phase 6F checklist only). Backlog: removed stale “Phase 6E undone.” **Last Updated** 2026-03-25. Explicit item: Next.js **`_sessionPromise`** reset on `/api/session` failure (`frontend/src/lib/api.ts`). Roadmap typo: CI **tests only**, not “tests only for ingestion.”
+
