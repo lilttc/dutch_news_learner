@@ -5,8 +5,12 @@ Adapted from tai8bot. Episode = one news video, SubtitleSegment = one subtitle l
 Vocabulary tables (VocabularyItem, EpisodeVocabulary, UserVocabulary) added in Phase 2.
 """
 
+import logging
 import os
+import sqlite3
 from datetime import datetime
+
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from sqlalchemy import (
     Boolean,
@@ -24,6 +28,38 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 
 Base = declarative_base()
+
+_logger = logging.getLogger(__name__)
+
+
+def _is_benign_schema_migration_error(exc: BaseException) -> bool:
+    """True when DDL failed only because this step was already applied (idempotent re-run).
+
+    We still log unexpected errors and re-raise: those indicate bad SQL, connectivity,
+    permissions, or a migration that needs a human fix — never swallow those.
+    """
+    orig = getattr(exc, "orig", None)
+
+    if isinstance(exc, OperationalError):
+        inner = orig if orig is not None else exc
+        if isinstance(inner, sqlite3.OperationalError):
+            msg = str(inner).lower()
+            if "duplicate column name" in msg:
+                return True
+            if "already exists" in msg:
+                return True
+        return False
+
+    if isinstance(exc, ProgrammingError):
+        inner = orig if orig is not None else exc
+        pgcode = getattr(inner, "pgcode", None)
+        if pgcode in ("42701", "42P07"):  # duplicate_column, duplicate_table
+            return True
+        if "already exists" in str(exc).lower():
+            return True
+        return False
+
+    return False
 
 
 class Episode(Base):
@@ -475,9 +511,25 @@ def _migrate_schema(engine):
             "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_episode_id ON user_episode_watches(episode_id)",
         ]
 
-    for sql in migrations:
+    for step, sql in enumerate(migrations):
+        sql_preview = sql.strip().replace("\n", " ")
+        if len(sql_preview) > 160:
+            sql_preview = sql_preview[:157] + "..."
         try:
             with engine.begin() as conn:
                 conn.execute(text(sql))
-        except Exception:
-            pass  # Column/table likely already exists
+        except Exception as e:
+            if _is_benign_schema_migration_error(e):
+                _logger.debug(
+                    "Schema migration step %s skipped (already applied): %s",
+                    step,
+                    e,
+                )
+                continue
+            _logger.exception(
+                "Schema migration failed at step %s (engine=%s). SQL: %s",
+                step,
+                engine.url.render_as_string(hide_password=True),
+                sql_preview,
+            )
+            raise
