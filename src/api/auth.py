@@ -16,10 +16,44 @@ from src.models import User
 
 from .deps import get_db
 
-# Config from env
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
+
+_secret_key_cache: str | None = None
+
+
+def get_secret_key() -> str:
+    """
+    Return the JWT signing secret.
+
+    * Production / staging: set ``SECRET_KEY`` (long random string, never commit it).
+    * Local API only: you may set ``ALLOW_INSECURE_DEV_JWT=1`` to use a fixed
+      dev-only key — **never** enable that in production (anyone could forge tokens).
+    """
+    global _secret_key_cache
+    if _secret_key_cache is not None:
+        return _secret_key_cache
+
+    key = os.environ.get("SECRET_KEY", "").strip()
+    if key:
+        _secret_key_cache = key
+        return _secret_key_cache
+
+    flag = os.environ.get("ALLOW_INSECURE_DEV_JWT", "").lower()
+    if flag in ("1", "true", "yes"):
+        _secret_key_cache = "insecure-dev-only-do-not-use-in-production"
+        return _secret_key_cache
+
+    raise RuntimeError(
+        "SECRET_KEY is required for JWT auth. Set SECRET_KEY in the environment, "
+        "or for local development only set ALLOW_INSECURE_DEV_JWT=1 (never in production). "
+        "See .env.example."
+    )
+
+
+def ensure_jwt_configured() -> None:
+    """Fail fast at API startup if JWT signing is misconfigured."""
+    get_secret_key()
 
 
 def hash_password(password: str) -> str:
@@ -38,12 +72,12 @@ def verify_password(plain: str, hashed: str) -> bool:
 def create_access_token(user_id: int, email: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
     payload = {"sub": str(user_id), "email": email, "exp": expire}
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(payload, get_secret_key(), algorithm=ALGORITHM)
 
 
 def decode_token(token: str) -> dict | None:
     try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return jwt.decode(token, get_secret_key(), algorithms=[ALGORITHM])
     except JWTError:
         return None
 

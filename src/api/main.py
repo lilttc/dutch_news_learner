@@ -22,6 +22,7 @@ load_dotenv()
 
 from src.models import _migrate_schema, get_engine
 
+from .auth import ensure_jwt_configured
 from .routes import auth, episodes, session, vocabulary
 
 _logger = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ async def lifespan(app: FastAPI):
         _logger.exception("Database unreachable during API startup (before schema migration)")
         raise
     _migrate_schema(engine)
+    ensure_jwt_configured()
     yield
 
 
