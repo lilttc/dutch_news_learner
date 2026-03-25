@@ -219,6 +219,9 @@ class UserVocabulary(Base):
     """
 
     __tablename__ = "user_vocabulary"
+    __table_args__ = (
+        UniqueConstraint("user_id", "vocabulary_id", name="uq_user_vocabulary_user_vocab"),
+    )
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, nullable=False, default=1, index=True)
@@ -452,6 +455,10 @@ def _migrate_schema(engine):
             """ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_id_seq')""",
             # Vocab export: optional learner sentence per user per word
             _pg_add_column("user_vocabulary", "user_sentence", "TEXT"),
+            # One row per (user_id, vocabulary_id): remove stragglers, then unique index
+            """DELETE FROM user_vocabulary a USING user_vocabulary b
+               WHERE a.user_id = b.user_id AND a.vocabulary_id = b.vocabulary_id AND a.id < b.id""",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_vocabulary_user_vocab ON user_vocabulary (user_id, vocabulary_id)",
             # Explicit "mark episode watched" per user (same user_id space as user_vocabulary)
             f"""CREATE TABLE IF NOT EXISTS user_episode_watches (
                 id {pk},
@@ -500,6 +507,14 @@ def _migrate_schema(engine):
             # SQLite: insert placeholder so next id is 1000000 (AUTOINCREMENT uses max+1)
             "INSERT OR IGNORE INTO users (id, email, password_hash, created_at) VALUES (999999, '__internal_seed_6f__', '', datetime('now'))",
             "ALTER TABLE user_vocabulary ADD COLUMN user_sentence TEXT",
+            """DELETE FROM user_vocabulary WHERE id IN (
+                SELECT id FROM (
+                    SELECT a.id AS id FROM user_vocabulary AS a
+                    INNER JOIN user_vocabulary AS b
+                    ON a.user_id = b.user_id AND a.vocabulary_id = b.vocabulary_id AND a.id < b.id
+                )
+            )""",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_vocabulary_user_vocab ON user_vocabulary (user_id, vocabulary_id)",
             f"""CREATE TABLE IF NOT EXISTS user_episode_watches (
                 id {pk},
                 user_id INTEGER NOT NULL,
