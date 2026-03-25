@@ -13,5 +13,8 @@ psycopg2-binary>=2.9.0  # Postgres driver (Neon)
 werkzeug>=3.0.0
 python-jose[cryptography]>=3.3.0
 
+# Rate limiting
+slowapi>=0.1.9
+
 # Config
 python-dotenv>=1.0.0

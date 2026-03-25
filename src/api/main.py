@@ -16,6 +16,8 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 
 load_dotenv()
@@ -23,6 +25,7 @@ load_dotenv()
 from src.models import Base, _migrate_schema, get_engine
 
 from .auth import ensure_jwt_configured
+from .ratelimit import limiter
 from .routes import auth, episodes, session, vocabulary
 
 _logger = logging.getLogger(__name__)
@@ -57,6 +60,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,

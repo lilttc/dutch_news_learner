@@ -2,7 +2,7 @@
 
 import re
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,7 @@ from ..auth import (
     verify_password,
 )
 from ..deps import get_db
+from ..ratelimit import limiter
 
 router = APIRouter(tags=["auth"])
 
@@ -60,7 +61,9 @@ def _validate_email(email: str) -> None:
 
 
 @router.post("/auth/register", response_model=AuthOut)
+@limiter.limit("10/minute")
 def register(
+    request: Request,
     body: RegisterIn,
     db: Session = Depends(get_db),
 ):
@@ -88,7 +91,9 @@ def register(
 
 
 @router.post("/auth/login", response_model=AuthOut)
+@limiter.limit("10/minute")
 def login(
+    request: Request,
     body: LoginIn,
     db: Session = Depends(get_db),
 ):
