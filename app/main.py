@@ -497,10 +497,25 @@ def build_vocab_bubble_data(
     return by_lemma
 
 
-def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_translation=True):
-    """Generate HTML for transcript with click-to-show definition bubbles (no page reload)."""
+def _transcript_html(segments, video_id, word_to_lemma, vocab_data, show_translation=True):
+    """Generate HTML with CSS hover tooltips + JS click-to-show bubble (rendered in iframe)."""
     merged = merge_segments_into_sentences(segments)
-    lines = []
+
+    def _tooltip_text(lemma_key):
+        entries = vocab_data.get(lemma_key) or vocab_data.get(lemma_key.lower()) or []
+        if not entries:
+            return ""
+        e = entries[0]
+        parts = []
+        if e.get("pos"):
+            parts.append(f'({e["pos"]})')
+        if e.get("meaning_en"):
+            parts.append(e["meaning_en"])
+        elif e.get("meaning"):
+            parts.append(e["meaning"])
+        return " ".join(parts)
+
+    transcript_lines_html = []
     for sent in merged:
         ts = format_timestamp(sent["start_time"])
         yt_url = f"https://www.youtube.com/watch?v={video_id}&t={int(sent['start_time'])}s"
@@ -513,228 +528,175 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
                     lemma = word_to_lemma[core_lower]
                     lemma_attr = lemma.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
                     word_attr = core_lower.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
-                    return f'{before}<span class="vocab-word" data-lemma="{lemma_attr}" data-word="{word_attr}">{core}</span>{after}'
+                    tip = _tooltip_text(lemma).replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
+                    tip_attr = f' data-tooltip="{tip}"' if tip else ""
+                    return f'{before}<span class="dnl-vocab-word" data-lemma="{lemma_attr}" data-word="{word_attr}"{tip_attr}>{core}</span>{after}'
                 return match.group(0)
-
             text = re.sub(r"(\W*)(\w+)(\W*)", replace_word, text)
-        lines.append({
-            "ts": ts,
-            "yt_url": yt_url,
-            "start_time": sent["start_time"],
-            "text": text,
-            "translation_en": sent["translation_en"] if show_translation else "",
-        })
+        line_html = (
+            f'<div class="dnl-transcript-line">'
+            f'<span class="dnl-transcript-ts">'
+            f'<a href="#" class="ts-link" data-time="{sent["start_time"]}" data-url="{yt_url}">{ts}</a>'
+            f'</span> {text}'
+        )
+        if show_translation and sent["translation_en"]:
+            line_html += f'<div class="dnl-transcript-en">{sent["translation_en"]}</div>'
+        line_html += '</div>'
+        transcript_lines_html.append(line_html)
 
-    vocab_json = json.dumps(vocab_data).replace("</", "\\u003c/")  # Avoid breaking script tag
-    lines_json = json.dumps(lines).replace("</", "\\u003c/")
+    transcript_body = "\n".join(transcript_lines_html)
+    vocab_json = json.dumps(vocab_data).replace("</", "\\u003c/")
 
-    return f"""
-<style>
-.vocab-word {{ color:#1f77b4; text-decoration:underline; cursor:pointer; }}
-.vocab-word:hover {{ color:#1565c0; }}
-.bubble {{ display:none; position:fixed; z-index:9999; background:#fff; border:1px solid #ccc;
-  border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); padding:12px 16px; max-width:min(360px, 90vw);
-  max-height:60vh; overflow-y:auto;
-  font-family:system-ui,sans-serif; font-size:14px; line-height:1.5; }}
-.bubble.show {{ display:block; }}
-.bubble-close {{ float:right; cursor:pointer; font-size:18px; color:#666; }}
-.bubble-close:hover {{ color:#000; }}
-.bubble-title {{ font-weight:bold; margin-bottom:8px; font-size:16px; }}
-.bubble-section {{ margin:6px 0; }}
-.bubble-links {{ margin-top:10px; font-size:12px; }}
-.bubble-links a {{ color:#1f77b4; margin-right:8px; }}
-.bubble-status {{ margin-top:12px; padding-top:10px; border-top:1px solid #eee; }}
-.bubble-status-btn {{
-  display:inline-block; margin:4px 6px 0 0; padding:5px 10px; border-radius:6px;
-  background:#f3f4f6; border:1px solid #e5e7eb; color:#1f77b4; font-size:13px;
-  cursor:pointer; font-family:inherit;
+    return f"""<style>
+body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margin:0; padding:8px 12px; }}
+.dnl-vocab-word {{ color:#1f77b4; text-decoration:underline dotted; cursor:pointer; position:relative; }}
+.dnl-vocab-word:hover {{ color:#1565c0; text-decoration:underline solid; }}
+.dnl-vocab-word[data-tooltip]:hover::after {{
+  content: attr(data-tooltip);
+  position:absolute; bottom:calc(100% + 4px); left:0; z-index:100;
+  background:#1a1a2e; color:#fff; padding:5px 9px; border-radius:5px;
+  font-size:13px; line-height:1.4; white-space:normal; max-width:260px;
+  pointer-events:none; box-shadow:0 2px 8px rgba(0,0,0,.25);
 }}
-.bubble-status-btn:hover {{ background:#e5e7eb; }}
-.bubble-status-btn.current {{ font-weight:600; background:#d1fae5; color:#065f46; border-color:#a7f3d0; }}
-.bubble-status-btn.saving {{ opacity:0.6; cursor:wait; }}
-.transcript-line {{ margin-bottom:14px; }}
-.transcript-ts {{ font-weight:bold; }}
-.transcript-ts a {{ color:inherit; cursor:pointer; }}
-.transcript-ts a:hover {{ text-decoration:underline; }}
-.transcript-en {{ color:#555; font-size:0.9em; margin-top:2px; margin-left:0; }}
-.bubble-overlay {{ position:fixed; inset:0; z-index:9998; }}
+.dnl-transcript-line {{ margin-bottom:14px; }}
+.dnl-transcript-ts {{ font-weight:bold; }}
+.dnl-transcript-ts a {{ color:inherit; cursor:pointer; text-decoration:none; }}
+.dnl-transcript-ts a:hover {{ text-decoration:underline; }}
+.dnl-transcript-en {{ color:#555; font-size:0.9em; margin-top:2px; }}
+.dnl-bubble {{ display:none; position:fixed; z-index:9999; background:#fff; border:1px solid #ccc;
+  border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); padding:12px 16px;
+  width:320px; max-width:calc(100vw - 32px); max-height:60vh; overflow-y:auto;
+  font-size:14px; line-height:1.5; }}
+.dnl-bubble.show {{ display:block; }}
+.dnl-bubble-close {{ float:right; cursor:pointer; font-size:18px; color:#666; padding:0 0 0 8px; }}
+.dnl-bubble-close:hover {{ color:#000; }}
+.dnl-bubble-title {{ font-weight:bold; font-size:16px; margin-bottom:8px; }}
+.dnl-bubble-section {{ margin:5px 0; }}
+.dnl-bubble-links {{ font-size:12px; margin-top:8px; }}
+.dnl-bubble-links a {{ color:#1f77b4; margin-right:6px; }}
+.dnl-bubble-status {{ margin-top:10px; padding-top:8px; border-top:1px solid #eee; display:flex; gap:6px; align-items:center; }}
+.dnl-pill {{ display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:999px;
+  font-size:12px; font-weight:500; border:1px solid #ddd; background:#f8f8f8; color:#999; }}
+.dnl-pill.active-new {{ background:#e3f2fd; color:#1565c0; border-color:#90caf9; }}
+.dnl-pill.active-learning {{ background:#fff3e0; color:#e65100; border-color:#ffcc80; }}
+.dnl-pill.active-known {{ background:#e8f5e9; color:#2e7d32; border-color:#a5d6a7; }}
+.dnl-bubble-hint {{ font-size:11px; color:#aaa; margin-top:6px; }}
+.dnl-bubble-hint a {{ color:#1f77b4; cursor:pointer; text-decoration:underline; }}
+.dnl-bubble-hint a:hover {{ color:#1565c0; }}
+.dnl-overlay {{ position:fixed; inset:0; z-index:9998; }}
 </style>
-<div id="transcript-root"></div>
-<div id="bubble-overlay" class="bubble-overlay" style="display:none;"></div>
-<div id="vocab-bubble" class="bubble">
-  <span id="bubble-close" class="bubble-close">&times;</span>
-  <div id="bubble-content"></div>
+{transcript_body}
+<div id="dnl-overlay" class="dnl-overlay" style="display:none;"></div>
+<div id="dnl-bubble" class="dnl-bubble">
+  <span id="dnl-close" class="dnl-bubble-close">&times;</span>
+  <div id="dnl-content"></div>
 </div>
 <script>
-function updateVocabStatus(vocabId, status) {{
-  var btns = document.querySelectorAll('.bubble-status-btn');
-  btns.forEach(function(b) {{
-    b.classList.remove('current');
-    b.classList.add('saving');
-    if (b.getAttribute('data-status') === status) b.classList.add('current');
-  }});
-  var hint = document.getElementById('bubble-status-hint');
-  if (hint) hint.textContent = 'Saving\u2026';
-  try {{
-    var u = new URL(window.parent.location.href);
-    u.searchParams.set('vocab_status_update', String(vocabId) + ':' + status);
-    window.parent.location.href = u.toString();
-  }} catch (e1) {{
-    try {{
-      var fb = new URL(document.referrer || window.location.href);
-      fb.searchParams.set('vocab_status_update', String(vocabId) + ':' + status);
-      window.parent.location.href = fb.toString();
-    }} catch (e2) {{
-      if (hint) hint.textContent = 'Could not save \u2014 use Vocabulary tab instead.';
-      btns.forEach(function(b) {{ b.classList.remove('saving'); }});
-    }}
-  }}
-}}
 (function() {{
   var vocabData = {vocab_json};
-  var lines = {lines_json};
-  var root = document.getElementById('transcript-root');
-  var bubble = document.getElementById('vocab-bubble');
-  var bubbleContent = document.getElementById('bubble-content');
-  var overlay = document.getElementById('bubble-overlay');
+  var bubble = document.getElementById('dnl-bubble');
+  var content = document.getElementById('dnl-content');
+  var overlay = document.getElementById('dnl-overlay');
 
-  function statusButton(vocabId, statusKey, label, current) {{
-    var cls = 'bubble-status-btn' + (current === statusKey ? ' current' : '');
-    return '<button class="' + cls + '" data-status="' + statusKey + '" onclick="updateVocabStatus(' + vocabId + ',\\x27' + statusKey + '\\x27)">' + label + '</button>';
-  }}
-
-  function renderBubble(lemma, clickedWord) {{
-    var lookupKey = (clickedWord && (vocabData[clickedWord] || vocabData[clickedWord.toLowerCase()])) ? clickedWord : lemma;
-    var entries = vocabData[lookupKey] || vocabData[lookupKey.toLowerCase()] || vocabData[lemma] || vocabData[lemma.toLowerCase()];
-    if (!entries || entries.length === 0) return;
-    var displayLemma = clickedWord || lemma;
-    var html = '<div class="bubble-title">' + displayLemma + '</div>';
-    var vocabId = null;
-    var userStatus = 'new';
-    entries.forEach(function(e, i) {{
-      if (e.vocabulary_id != null && vocabId == null) vocabId = e.vocabulary_id;
-      if (e.user_status) userStatus = e.user_status;
-    }});
-    entries.forEach(function(e, i) {{
-      if (e.pos) html += '<div class="bubble-section"><strong>(' + e.pos + ')</strong></div>';
-      if (e.lemma && e.lemma.toLowerCase() !== displayLemma.toLowerCase()) {{
-        html += '<div class="bubble-section"><strong>' + (e.pos === 'VERB' ? 'Infinitive' : 'Base form') + ':</strong> ' + e.lemma + '</div>';
-      }}
-      html += '<div class="bubble-section"><strong>Meaning:</strong> ' + (e.meaning || '') + '</div>';
-      if (e.meaning_en) html += '<div class="bubble-section"><strong>English:</strong> ' + e.meaning_en + '</div>';
-      if (e.forms && e.forms.length > 1) {{
-        html += '<div class="bubble-section"><strong>Forms:</strong> ' + e.forms.join(', ') + '</div>';
-      }}
-      if (e.example) {{
-        html += '<div class="bubble-section"><strong>Example:</strong> <em>' + e.example + '</em></div>';
-      }}
-      if (e.links && Object.keys(e.links).length) {{
-        var links = [];
-        for (var k in e.links) links.push('<a href="' + e.links[k] + '" target="_blank" rel="noopener">' + k + '</a>');
-        html += '<div class="bubble-section bubble-links"><strong>Look up:</strong> ' + links.join(' · ') + '</div>';
-      }}
-    }});
-    if (vocabId != null) {{
-      html += '<div class="bubble-section bubble-status"><strong>My progress:</strong><br/>' +
-        statusButton(vocabId, 'new', 'New', userStatus) +
-        statusButton(vocabId, 'learning', 'Learning', userStatus) +
-        statusButton(vocabId, 'known', 'Known', userStatus) +
-        '<div id="bubble-status-hint" style="font-size:11px;color:#666;margin-top:6px;">Click to save (reloads page).</div></div>';
-    }}
-    bubbleContent.innerHTML = html;
-  }}
+  function hideBubble() {{ bubble.classList.remove('show'); overlay.style.display='none'; }}
+  document.getElementById('dnl-close').onclick = hideBubble;
+  overlay.onclick = hideBubble;
 
   function showBubble(lemma, clickedWord, ev) {{
-    renderBubble(lemma, clickedWord);
+    var key = (clickedWord && (vocabData[clickedWord]||vocabData[clickedWord.toLowerCase()])) ? clickedWord : lemma;
+    var entries = vocabData[key]||vocabData[key.toLowerCase()]||vocabData[lemma]||vocabData[lemma.toLowerCase()];
+    if (!entries||!entries.length) return;
+    var display = clickedWord||lemma;
+    var html = '<div class="dnl-bubble-title">'+display+'</div>';
+    var userStatus = 'new';
+    entries.forEach(function(e) {{ if (e.user_status) userStatus = e.user_status; }});
+    entries.forEach(function(e) {{
+      if (e.pos) html += '<div class="dnl-bubble-section"><strong>('+e.pos+')</strong></div>';
+      if (e.lemma && e.lemma.toLowerCase() !== display.toLowerCase())
+        html += '<div class="dnl-bubble-section"><strong>'+(e.pos==='VERB'?'Infinitive':'Base form')+':</strong> '+e.lemma+'</div>';
+      html += '<div class="dnl-bubble-section"><strong>Meaning:</strong> '+(e.meaning||'')+'</div>';
+      if (e.meaning_en) html += '<div class="dnl-bubble-section"><strong>English:</strong> '+e.meaning_en+'</div>';
+      if (e.forms && e.forms.length > 1)
+        html += '<div class="dnl-bubble-section"><strong>Forms:</strong> '+e.forms.join(', ')+'</div>';
+      if (e.example)
+        html += '<div class="dnl-bubble-section"><strong>Example:</strong> <em>'+e.example+'</em></div>';
+      if (e.links && Object.keys(e.links).length) {{
+        var lnks = [];
+        for (var k in e.links) lnks.push('<a href="'+e.links[k]+'" target="_blank" rel="noopener">'+k+'</a>');
+        html += '<div class="dnl-bubble-section dnl-bubble-links"><strong>Look up:</strong> '+lnks.join(' \u00b7 ')+'</div>';
+      }}
+    }});
+    var statuses = [["new","New",""],["learning","Learning","\U0001f4d6"],["known","Known","\u2705"]];
+    html += '<div class="dnl-bubble-status">';
+    statuses.forEach(function(s) {{
+      var cls = 'dnl-pill' + (s[0]===userStatus ? ' active-'+s[0] : '');
+      html += '<span class="'+cls+'">'+(s[2]?s[2]+' ':'')+s[1]+'</span>';
+    }});
+    html += '</div>';
+    var linkLemma = entries[0].lemma || display;
+    html += '<div class="dnl-bubble-hint"><a href="#" class="dnl-goto-vocab" data-lemma="'+encodeURIComponent(linkLemma)+'">Change status in Vocabulary tab \u2192</a></div>';
+    content.innerHTML = html;
     bubble.classList.add('show');
-
     var rect = ev.target.getBoundingClientRect();
-    var bh = bubble.offsetHeight;
-    var spaceBelow = window.innerHeight - rect.bottom - 16;
-    var spaceAbove = rect.top - 16;
-
-    // Place below the word if there's room, otherwise flip above
-    if (spaceBelow >= bh || spaceBelow >= spaceAbove) {{
-      bubble.style.top = (rect.bottom + 8) + 'px';
-    }} else {{
-      bubble.style.top = Math.max(8, rect.top - bh - 8) + 'px';
-    }}
-    bubble.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - Math.min(360, window.innerWidth * 0.9) - 16)) + 'px';
+    var bh = bubble.offsetHeight, bw = bubble.offsetWidth;
+    var top = (window.innerHeight - rect.bottom > bh + 16) ? rect.bottom + 8 : Math.max(8, rect.top - bh - 8);
+    var left = Math.min(rect.left, window.innerWidth - bw - 16);
+    if (left < 8) left = 8;
+    bubble.style.top = top + 'px';
+    bubble.style.left = left + 'px';
     overlay.style.display = 'block';
   }}
 
-  function hideBubble() {{
-    bubble.classList.remove('show');
-    overlay.style.display = 'none';
+  function goToVocabTab(lemma) {{
+    try {{
+      var tabs = window.parent.document.querySelectorAll('[role="tab"]');
+      for (var i = 0; i < tabs.length; i++) {{
+        if (tabs[i].textContent.indexOf('Vocabulary') !== -1) {{
+          tabs[i].click();
+          break;
+        }}
+      }}
+      var url = new URL(window.parent.location.href);
+      url.searchParams.set('vocab_word', lemma);
+      window.parent.history.replaceState(null, '', url.toString());
+      var searchInput = window.parent.document.querySelector('input[aria-label="Search word"]');
+      if (searchInput) {{
+        var nativeSetter = Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype, 'value').set;
+        nativeSetter.call(searchInput, lemma);
+        searchInput.dispatchEvent(new Event('input', {{bubbles:true}}));
+        searchInput.dispatchEvent(new Event('change', {{bubbles:true}}));
+      }}
+    }} catch(e) {{}}
+    hideBubble();
   }}
 
-  document.getElementById('bubble-close').onclick = hideBubble;
-  overlay.onclick = hideBubble;
-
-  // Seek the YouTube player embedded in the parent Streamlit page.
-  // st.components.v1.html() iframes have allow-same-origin, so we can
-  // access window.parent.document to find the YouTube iframe by ID,
-  // then use YouTube's postMessage protocol to seek + play.
   function seekVideo(seconds) {{
     try {{
-      var ytFrame = window.parent.document.getElementById('yt-player');
-      if (ytFrame && ytFrame.contentWindow) {{
-        ytFrame.contentWindow.postMessage(JSON.stringify({{
-          event: 'command', func: 'seekTo', args: [seconds, true]
-        }}), '*');
-        ytFrame.contentWindow.postMessage(JSON.stringify({{
-          event: 'command', func: 'playVideo', args: []
-        }}), '*');
+      var f = window.parent.document.getElementById('yt-player');
+      if (f && f.contentWindow) {{
+        f.contentWindow.postMessage(JSON.stringify({{event:'command',func:'seekTo',args:[seconds,true]}}),'*');
+        f.contentWindow.postMessage(JSON.stringify({{event:'command',func:'playVideo',args:[]}}),'*');
         return true;
       }}
     }} catch(e) {{}}
     return false;
   }}
 
-  root.addEventListener('click', function(ev) {{
-    // Handle timestamp clicks — seek embedded video
-    var tsLink = ev.target.closest('.ts-link');
-    if (tsLink) {{
-      ev.preventDefault();
-      var time = parseFloat(tsLink.getAttribute('data-time'));
-      if (!seekVideo(time)) {{
-        window.open(tsLink.getAttribute('data-url'), '_blank');
-      }}
-      return;
-    }}
-    // Handle vocab word clicks — show definition bubble
-    var w = ev.target.closest('.vocab-word');
-    if (w) {{
-      ev.preventDefault();
-      ev.stopPropagation();
-      var lemma = w.getAttribute('data-lemma');
-      var clickedWord = w.getAttribute('data-word') || lemma;
-      showBubble(lemma, clickedWord, ev);
-    }}
-  }});
-
-  lines.forEach(function(line) {{
-    var div = document.createElement('div');
-    div.className = 'transcript-line';
-    var html = '<span class="transcript-ts"><a href="#" class="ts-link" data-time="' + line.start_time + '" data-url="' + line.yt_url + '">' + line.ts + '</a></span> ' + line.text;
-    if (line.translation_en) {{
-      html += '<div class="transcript-en">' + line.translation_en + '</div>';
-    }}
-    div.innerHTML = html;
-    root.appendChild(div);
+  document.addEventListener('click', function(ev) {{
+    var gv = ev.target.closest('.dnl-goto-vocab');
+    if (gv) {{ ev.preventDefault(); goToVocabTab(decodeURIComponent(gv.getAttribute('data-lemma'))); return; }}
+    var ts = ev.target.closest('.ts-link');
+    if (ts) {{ ev.preventDefault(); if (!seekVideo(parseFloat(ts.getAttribute('data-time')))) window.open(ts.getAttribute('data-url'),'_blank'); return; }}
+    var w = ev.target.closest('.dnl-vocab-word');
+    if (w) {{ ev.preventDefault(); ev.stopPropagation(); showBubble(w.getAttribute('data-lemma'), w.getAttribute('data-word')||w.getAttribute('data-lemma'), ev); }}
   }});
 }})();
-</script>
-"""
+</script>"""
 
 
-def render_transcript_with_bubbles(segments, video_id, word_to_lemma=None, vocab_data=None, show_translation=True):
-    """
-    Render transcript with clickable words. Click shows a bubble with definition, forms, example.
-    No page reload — all client-side.
-    """
+def render_transcript(segments, video_id, word_to_lemma=None, vocab_data=None, show_translation=True):
+    """Render transcript in an iframe with clickable word bubbles and hover tooltips."""
     if not word_to_lemma or not vocab_data:
-        # Fallback: plain transcript without bubbles
         merged = merge_segments_into_sentences(segments)
         for sent in merged:
             ts = format_timestamp(sent["start_time"])
@@ -744,10 +706,9 @@ def render_transcript_with_bubbles(segments, video_id, word_to_lemma=None, vocab
                 st.caption(sent["translation_en"])
             st.markdown("")
         return
-    html = _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_translation=show_translation)
-    merged_count = len(merge_segments_into_sentences(segments))
-    estimated_height = 150 + merged_count * 40
-    st.components.v1.html(html, height=min(800, estimated_height), scrolling=True)
+    html = _transcript_html(segments, video_id, word_to_lemma, vocab_data, show_translation=show_translation)
+    estimated_height = 50 * len(merge_segments_into_sentences(segments))
+    st.components.v1.html(html, height=min(800, max(400, estimated_height)), scrolling=True)
 
 
 DEFAULT_VOCAB_LIMIT = 20
@@ -884,7 +845,11 @@ def _render_vocabulary_fragment(episode_id):
             ]
         if search_query:
             q = search_query.lower()
-            vocab_data = [v for v in vocab_data if q in v["lemma"].lower()]
+            vocab_data = [
+                v for v in vocab_data
+                if q in v["lemma"].lower()
+                or q in (v.get("surface_forms") or "").lower()
+            ]
         if sort_by == "alpha":
             vocab_data = sorted(vocab_data, key=lambda v: v["lemma"].lower())
         else:
@@ -898,6 +863,8 @@ def _render_vocabulary_fragment(episode_id):
         is_searching = bool(search_query)
         display_vocab = vocab_data if (show_all or is_searching) else vocab_data[:DEFAULT_VOCAB_LIMIT]
 
+        linked_expand = st.session_state.pop("_vocab_linked_word", None)
+
         lookup = get_lookup()
         for v in display_vocab:
             vid = v["vocabulary_id"]
@@ -907,8 +874,15 @@ def _render_vocabulary_fragment(episode_id):
             saved_note = (uv_row[1] if uv_row else None) or ""
             status_icon = STATUS_ICONS.get(current_status, "")
             label = f"{status_icon} **{v['lemma']}** ({v['pos']}) — {count}×" if status_icon else f"**{v['lemma']}** ({v['pos']}) — {count}×"
+            should_expand = (
+                linked_expand is not None
+                and (
+                    v["lemma"].lower() == linked_expand
+                    or linked_expand in (v.get("surface_forms") or "").lower()
+                )
+            )
 
-            with st.expander(label, key=f"vocab_exp_{episode_id}_{vid}"):
+            with st.expander(label, expanded=should_expand, key=f"vocab_exp_{episode_id}_{vid}"):
                 dict_entry = _cached_dict_lookup(v["lemma"], v["pos"])
                 gloss_nl = v["translation"] or (dict_entry.get("gloss") if dict_entry else None)
                 gloss_en = dict_entry.get("gloss_en") if dict_entry else None
@@ -1087,37 +1061,38 @@ def render_vocabulary(episode_vocab_list, session=None, statuses=None,
 
 
 def _render_tab_transcript(episode, vocab_list, session, user_id: int):
-    """Render the Transcript tab: translation toggle + clickable transcript."""
+    """Render the Transcript tab with clickable word bubbles inside the iframe."""
     show_translation = st.checkbox(
         "Show English translation",
         value=False,
         key="show_translation",
     )
     st.caption(
-        "Click any underlined word to see its definition. "
-        "In the bubble, use **New / Learning / Known** to save progress (page reloads)."
+        "Hover underlined words for a quick meaning. Click a word for its full definition."
     )
-    if episode.subtitle_segments:
-        word_to_lemma = build_word_to_lemma_map(vocab_list) if vocab_list else None
-        statuses_by_vid: dict[int, str] = {}
-        if vocab_list:
-            all_vids = [ev.vocabulary_item.id for ev in vocab_list]
-            uv_map = load_user_vocab_for_ids(session, user_id, all_vids)
-            statuses_by_vid = {vid: t[0] for vid, t in uv_map.items()}
-        vocab_data = (
-            build_vocab_bubble_data(vocab_list, statuses_by_vid=statuses_by_vid)
-            if vocab_list
-            else None
-        )
-        render_transcript_with_bubbles(
-            episode.subtitle_segments,
-            episode.video_id,
-            word_to_lemma=word_to_lemma,
-            vocab_data=vocab_data,
-            show_translation=show_translation,
-        )
-    else:
+    if not episode.subtitle_segments:
         st.info("No subtitles for this episode.")
+        return
+
+    word_to_lemma = build_word_to_lemma_map(vocab_list) if vocab_list else None
+    statuses_by_vid: dict[int, str] = {}
+    if vocab_list:
+        all_vids = [ev.vocabulary_item.id for ev in vocab_list]
+        uv_map = load_user_vocab_for_ids(session, user_id, all_vids)
+        statuses_by_vid = {vid: t[0] for vid, t in uv_map.items()}
+    vocab_data = (
+        build_vocab_bubble_data(vocab_list, statuses_by_vid=statuses_by_vid)
+        if vocab_list
+        else None
+    )
+
+    render_transcript(
+        episode.subtitle_segments,
+        episode.video_id,
+        word_to_lemma=word_to_lemma,
+        vocab_data=vocab_data,
+        show_translation=show_translation,
+    )
 
 
 def _render_tab_vocabulary(vocab_list, session, episode_id=None):
@@ -1125,6 +1100,12 @@ def _render_tab_vocabulary(vocab_list, session, episode_id=None):
     if not vocab_list:
         st.info("No vocabulary extracted. Run `python scripts/extract_vocabulary.py`.")
         return
+
+    linked_word = st.query_params.get("vocab_word", "")
+    if linked_word:
+        st.session_state["vocab_search"] = linked_word
+        st.session_state["_vocab_linked_word"] = linked_word.lower()
+        st.query_params.pop("vocab_word", None)
 
     is_logged_in = st.session_state.get("auth_user_id") is not None
     st.caption(
