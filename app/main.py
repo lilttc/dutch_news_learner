@@ -267,6 +267,7 @@ def _persist_vocab_status_click(vocabulary_id: int, status: str, user_id: int) -
         set_vocab_status(db, vocabulary_id, status, user_id)
     finally:
         db.close()
+    st.session_state["_vocab_status_changed"] = True
 
 
 def _persist_vocab_note_save(
@@ -581,8 +582,6 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
 .dnl-pill.active-learning {{ background:#fff3e0; color:#e65100; border-color:#ffcc80; }}
 .dnl-pill.active-known {{ background:#e8f5e9; color:#2e7d32; border-color:#a5d6a7; }}
 .dnl-bubble-hint {{ font-size:11px; color:#aaa; margin-top:6px; }}
-.dnl-bubble-hint a {{ color:#1f77b4; cursor:pointer; text-decoration:underline; }}
-.dnl-bubble-hint a:hover {{ color:#1565c0; }}
 .dnl-overlay {{ position:fixed; inset:0; z-index:9998; }}
 </style>
 {transcript_body}
@@ -633,8 +632,7 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
       html += '<span class="'+cls+'">'+(s[2]?s[2]+' ':'')+s[1]+'</span>';
     }});
     html += '</div>';
-    var linkLemma = entries[0].lemma || display;
-    html += '<div class="dnl-bubble-hint"><a href="#" class="dnl-goto-vocab" data-lemma="'+encodeURIComponent(linkLemma)+'">Change status in Vocabulary tab \u2192</a></div>';
+    html += '<div class="dnl-bubble-hint">Change status in the Vocabulary tab</div>';
     content.innerHTML = html;
     bubble.classList.add('show');
     var rect = ev.target.getBoundingClientRect();
@@ -645,29 +643,6 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
     bubble.style.top = top + 'px';
     bubble.style.left = left + 'px';
     overlay.style.display = 'block';
-  }}
-
-  function goToVocabTab(lemma) {{
-    try {{
-      var tabs = window.parent.document.querySelectorAll('[role="tab"]');
-      for (var i = 0; i < tabs.length; i++) {{
-        if (tabs[i].textContent.indexOf('Vocabulary') !== -1) {{
-          tabs[i].click();
-          break;
-        }}
-      }}
-      var url = new URL(window.parent.location.href);
-      url.searchParams.set('vocab_word', lemma);
-      window.parent.history.replaceState(null, '', url.toString());
-      var searchInput = window.parent.document.querySelector('input[aria-label="Search word"]');
-      if (searchInput) {{
-        var nativeSetter = Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype, 'value').set;
-        nativeSetter.call(searchInput, lemma);
-        searchInput.dispatchEvent(new Event('input', {{bubbles:true}}));
-        searchInput.dispatchEvent(new Event('change', {{bubbles:true}}));
-      }}
-    }} catch(e) {{}}
-    hideBubble();
   }}
 
   function seekVideo(seconds) {{
@@ -683,8 +658,6 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
   }}
 
   document.addEventListener('click', function(ev) {{
-    var gv = ev.target.closest('.dnl-goto-vocab');
-    if (gv) {{ ev.preventDefault(); goToVocabTab(decodeURIComponent(gv.getAttribute('data-lemma'))); return; }}
     var ts = ev.target.closest('.ts-link');
     if (ts) {{ ev.preventDefault(); if (!seekVideo(parseFloat(ts.getAttribute('data-time')))) window.open(ts.getAttribute('data-url'),'_blank'); return; }}
     var w = ev.target.closest('.dnl-vocab-word');
@@ -813,12 +786,13 @@ def _render_vocabulary_fragment(episode_id):
     """
     Vocabulary list with status buttons and optional learner note per word.
 
-    @st.fragment: only this block reruns on status click (fast). Transcript,
-    video, and episode DB load in main() are skipped on those reruns.
-
-    Stable keys on expanders/buttons (episode_id + vocabulary_id) reduce
-    duplicate-widget glitches with tabs + fragment.
+    @st.fragment: only this block reruns on status click (fast). On second
+    rerun after a status change, triggers a full app rerun so the transcript
+    bubble badges stay in sync.
     """
+    if st.session_state.pop("_vocab_status_changed", False):
+        st.rerun(scope="app")
+
     if not episode_id:
         return
     vocab_data = _get_episode_vocab_data(episode_id)
@@ -863,8 +837,6 @@ def _render_vocabulary_fragment(episode_id):
         is_searching = bool(search_query)
         display_vocab = vocab_data if (show_all or is_searching) else vocab_data[:DEFAULT_VOCAB_LIMIT]
 
-        linked_expand = st.session_state.pop("_vocab_linked_word", None)
-
         lookup = get_lookup()
         for v in display_vocab:
             vid = v["vocabulary_id"]
@@ -874,15 +846,9 @@ def _render_vocabulary_fragment(episode_id):
             saved_note = (uv_row[1] if uv_row else None) or ""
             status_icon = STATUS_ICONS.get(current_status, "")
             label = f"{status_icon} **{v['lemma']}** ({v['pos']}) — {count}×" if status_icon else f"**{v['lemma']}** ({v['pos']}) — {count}×"
-            should_expand = (
-                linked_expand is not None
-                and (
-                    v["lemma"].lower() == linked_expand
-                    or linked_expand in (v.get("surface_forms") or "").lower()
-                )
-            )
+            auto_expand = is_searching and total <= 3
 
-            with st.expander(label, expanded=should_expand, key=f"vocab_exp_{episode_id}_{vid}"):
+            with st.expander(label, expanded=auto_expand, key=f"vocab_exp_{episode_id}_{vid}"):
                 dict_entry = _cached_dict_lookup(v["lemma"], v["pos"])
                 gloss_nl = v["translation"] or (dict_entry.get("gloss") if dict_entry else None)
                 gloss_en = dict_entry.get("gloss_en") if dict_entry else None
@@ -1100,12 +1066,6 @@ def _render_tab_vocabulary(vocab_list, session, episode_id=None):
     if not vocab_list:
         st.info("No vocabulary extracted. Run `python scripts/extract_vocabulary.py`.")
         return
-
-    linked_word = st.query_params.get("vocab_word", "")
-    if linked_word:
-        st.session_state["vocab_search"] = linked_word
-        st.session_state["_vocab_linked_word"] = linked_word.lower()
-        st.query_params.pop("vocab_word", None)
 
     is_logged_in = st.session_state.get("auth_user_id") is not None
     st.caption(

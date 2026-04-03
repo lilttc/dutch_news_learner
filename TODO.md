@@ -17,11 +17,10 @@
 - Vocabulary export to CSV / Anki
 
 **Most important next actions (in order):**
-1. **Fix bubble status buttons** — users can't save vocabulary from transcript (critical UX bug, Apr 3)
-2. **Vocab QA Agent** — LLM-as-judge pipeline step to fix POS errors, wrong translations, flag MWEs/idioms (addresses 4 user-reported issues, strong CV signal)
-3. **Topic extraction prompt** — expand from 1-2 words to 2-5 word phrases for better related reading
-4. **Translation alignment + toggle perf** — fix segment merge gap bug; optimize show/hide toggle
-5. **Shadowing mode** — auto-pause after each sentence for speaking practice (highest-value learning feature)
+1. **Vocab QA Agent** — LLM-as-judge pipeline step to fix POS errors, wrong translations, flag MWEs/idioms (addresses 4 user-reported issues, strong CV signal)
+2. **Topic extraction prompt** — expand from 1-2 words to 2-5 word phrases for better related reading
+3. **Translation alignment + toggle perf** — fix segment merge gap bug; optimize show/hide toggle
+4. **Shadowing mode** — auto-pause after each sentence for speaking practice (highest-value learning feature)
 
 **What NOT to touch first:**
 - Next.js / FastAPI — suspended, not the priority while the project is hobby-funded
@@ -246,7 +245,7 @@ Watched today's NOS Journaal in Makkelijke Taal as a user. Found 9 issues (3 UX 
 
 #### UX Bugs
 
-- [ ] **Bubble status buttons broken** — Clicking "Learning" / "Known" in the transcript definition bubble does nothing visible (no shade, no save). Root cause: bubble is inside `st.components.v1.html` iframe; `<a target="_top">` with `?vocab_status_update=` query param likely fails on Streamlit Cloud due to iframe URL resolution. **Fix:** switch to `window.parent.postMessage` and handle in Streamlit, or convert to JS-only optimistic UI + `fetch` to the API.
+- [x] **Bubble status buttons broken** — Resolved Apr 3. Status buttons cannot work cross-frame (iframe sandbox blocks parent navigation). **Solution:** read-only bubble with full definition, forms, examples, dictionary links, and styled status pills. Status changes stay in the Vocabulary tab. CSS hover tooltips for quick meaning. Surface form search + auto-expand in Vocabulary tab. Full app rerun after status change syncs transcript badges.
 - [ ] **English translation misaligned with Dutch** — After segment merging, English translations don't line up with their Dutch sentences. Root cause: `merge_segments_into_sentences` skips empty `translation_en` (`if tr:` guard on line 378) instead of padding with empty string, so remaining translations shift up. **Fix:** always append `tr` (even empty) to `buf_translations` so the count stays aligned.
 - [ ] **Slow toggle for show/hide English translation** — Checkbox triggers full `_render_episode_detail_fragment` rerun (rebuilds all bubble HTML, vocab data, tabs). **Fix:** pre-build both with/without-translation HTML and toggle client-side with JS, or separate transcript into its own lighter `@st.fragment`.
 
@@ -270,11 +269,11 @@ Watched today's NOS Journaal in Makkelijke Taal as a user. Found 9 issues (3 UX 
 
 #### Priority Order
 
-1. **Bubble status buttons** (critical: can't save words)
-2. **Topic extraction prompt** (quick win, immediate content improvement)
-3. **Translation alignment** (visible bug, small fix)
-4. **Translation toggle performance** (UX polish)
-5. **Vocab QA agent** (biggest value — fixes 4 issues, strong CV signal as LLM-as-judge pattern)
+1. ~~**Bubble status buttons**~~ ✅ Done (Apr 3)
+2. **Vocab QA agent** (biggest value — fixes 4 issues, strong CV signal as LLM-as-judge pattern)
+3. **Topic extraction prompt** (quick win, immediate content improvement)
+4. **Translation alignment** (visible bug, small fix)
+5. **Translation toggle performance** (UX polish)
 
 ### Reddit Feedback — Bugs to Fix (Mar 2026)
 
@@ -689,5 +688,13 @@ python scripts/convert_dictionary_to_sqlite.py
 ### Apr 3, 2026
 - **Dogfooding session** -- Watched today's NOS episode. Found 9 issues across UX, vocabulary quality, and content.
 - **Vocab QA Agent designed** -- New LLM-as-judge pipeline step to fix POS errors, wrong translations, and flag MWEs/idioms. Addresses 4 of 9 issues.
-- **Priority** -- (1) bubble buttons, (2) topic prompt, (3) translation alignment, (4) toggle perf, (5) vocab QA agent.
+- **Fix bubble status buttons** -- Iframe sandbox blocks all cross-frame navigation (target=_top, window.parent.location, postMessage, BroadcastChannel, custom components). Final solution:
+  - Read-only JS bubble inside `st.components.v1.html` iframe with full definition, forms, examples, dictionary links
+  - Styled status pills (New / 📖 Learning / ✅ Known) with active state highlighted
+  - CSS hover tooltips on underlined words for quick meaning peek
+  - Status changes remain in the Vocabulary tab (native Streamlit buttons, reliable)
+  - Vocabulary search now matches surface forms (e.g. "uitdrukkingsloze" finds "uitdrukkingsloos")
+  - Auto-expand expanders when search yields ≤3 results
+  - `st.rerun(scope="app")` after status change keeps transcript bubble badges in sync
+- **Attempted and abandoned:** Custom Streamlit component (too slow — every click triggered full rerun), two-column layout with right-pane vocab panel (click-to-select didn't sync), BroadcastChannel bridge (blocked by sandbox), direct parent navigation from iframe (blocked by sandbox).
 
