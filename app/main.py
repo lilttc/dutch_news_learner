@@ -544,12 +544,14 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
 .bubble-links {{ margin-top:10px; font-size:12px; }}
 .bubble-links a {{ color:#1f77b4; margin-right:8px; }}
 .bubble-status {{ margin-top:12px; padding-top:10px; border-top:1px solid #eee; }}
-.bubble-status-link {{
+.bubble-status-btn {{
   display:inline-block; margin:4px 6px 0 0; padding:5px 10px; border-radius:6px;
-  background:#f3f4f6; text-decoration:none; color:#1f77b4; font-size:13px;
+  background:#f3f4f6; border:1px solid #e5e7eb; color:#1f77b4; font-size:13px;
+  cursor:pointer; font-family:inherit;
 }}
-.bubble-status-link:hover {{ background:#e5e7eb; }}
-.bubble-status-link.current {{ font-weight:600; background:#d1fae5; color:#065f46; }}
+.bubble-status-btn:hover {{ background:#e5e7eb; }}
+.bubble-status-btn.current {{ font-weight:600; background:#d1fae5; color:#065f46; border-color:#a7f3d0; }}
+.bubble-status-btn.saving {{ opacity:0.6; cursor:wait; }}
 .transcript-line {{ margin-bottom:14px; }}
 .transcript-ts {{ font-weight:bold; }}
 .transcript-ts a {{ color:inherit; cursor:pointer; }}
@@ -564,6 +566,30 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
   <div id="bubble-content"></div>
 </div>
 <script>
+function updateVocabStatus(vocabId, status) {{
+  var btns = document.querySelectorAll('.bubble-status-btn');
+  btns.forEach(function(b) {{
+    b.classList.remove('current');
+    b.classList.add('saving');
+    if (b.getAttribute('data-status') === status) b.classList.add('current');
+  }});
+  var hint = document.getElementById('bubble-status-hint');
+  if (hint) hint.textContent = 'Saving\u2026';
+  try {{
+    var u = new URL(window.parent.location.href);
+    u.searchParams.set('vocab_status_update', String(vocabId) + ':' + status);
+    window.parent.location.href = u.toString();
+  }} catch (e1) {{
+    try {{
+      var fb = new URL(document.referrer || window.location.href);
+      fb.searchParams.set('vocab_status_update', String(vocabId) + ':' + status);
+      window.parent.location.href = fb.toString();
+    }} catch (e2) {{
+      if (hint) hint.textContent = 'Could not save \u2014 use Vocabulary tab instead.';
+      btns.forEach(function(b) {{ b.classList.remove('saving'); }});
+    }}
+  }}
+}}
 (function() {{
   var vocabData = {vocab_json};
   var lines = {lines_json};
@@ -572,19 +598,9 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
   var bubbleContent = document.getElementById('bubble-content');
   var overlay = document.getElementById('bubble-overlay');
 
-  function vocabStatusHref(vocabId, status) {{
-    try {{
-      var u = new URL(window.parent.location.href);
-      u.searchParams.set('vocab_status_update', String(vocabId) + ':' + status);
-      return u.toString();
-    }} catch (err) {{
-      return '#';
-    }}
-  }}
-
-  function statusLink(vocabId, statusKey, label, current) {{
-    var cls = 'bubble-status-link' + (current === statusKey ? ' current' : '');
-    return '<a class="' + cls + '" href="' + vocabStatusHref(vocabId, statusKey) + '" target="_top">' + label + '</a>';
+  function statusButton(vocabId, statusKey, label, current) {{
+    var cls = 'bubble-status-btn' + (current === statusKey ? ' current' : '');
+    return '<button class="' + cls + '" data-status="' + statusKey + '" onclick="updateVocabStatus(' + vocabId + ',\\x27' + statusKey + '\\x27)">' + label + '</button>';
   }}
 
   function renderBubble(lemma, clickedWord) {{
@@ -620,10 +636,10 @@ def _transcript_bubble_html(segments, video_id, word_to_lemma, vocab_data, show_
     }});
     if (vocabId != null) {{
       html += '<div class="bubble-section bubble-status"><strong>My progress:</strong><br/>' +
-        statusLink(vocabId, 'new', 'New', userStatus) +
-        statusLink(vocabId, 'learning', 'Learning', userStatus) +
-        statusLink(vocabId, 'known', 'Known', userStatus) +
-        '<div style="font-size:11px;color:#666;margin-top:6px;">Saves and reloads the page (same as Vocabulary tab).</div></div>';
+        statusButton(vocabId, 'new', 'New', userStatus) +
+        statusButton(vocabId, 'learning', 'Learning', userStatus) +
+        statusButton(vocabId, 'known', 'Known', userStatus) +
+        '<div id="bubble-status-hint" style="font-size:11px;color:#666;margin-top:6px;">Click to save (reloads page).</div></div>';
     }}
     bubbleContent.innerHTML = html;
   }}

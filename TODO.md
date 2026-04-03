@@ -1,6 +1,32 @@
 # Dutch News Learner TODO
 
-**Last Updated:** 2026-03-26
+**Last Updated:** 2026-04-03 (user testing session — own dogfooding)
+
+---
+
+## Start Here (new engineer)
+
+**What the app is:** Streamlit app (primary, live on Streamlit Cloud) that ingests NOS Journaal in Makkelijke Taal from YouTube daily, extracts Dutch vocabulary, and lets users track their learning progress. FastAPI + Next.js exist as a secondary/portfolio frontend (currently suspended on Render/Vercel to save cost).
+
+**What is working today:**
+- Streamlit app is live and has real users (from r/learndutch)
+- Neon Postgres is the database (cloud, free tier)
+- Daily pipeline runs via WSL cron on owner's PC (weekdays 18:00 Amsterdam) — see **Handover: scheduled pipeline** for full ops context
+- Email auth is fully implemented (Streamlit sidebar + FastAPI + Next.js)
+- Per-user vocabulary tracking (anonymous sessions + registered accounts)
+- Vocabulary export to CSV / Anki
+
+**Most important next actions (in order):**
+1. **Fix bubble status buttons** — users can't save vocabulary from transcript (critical UX bug, Apr 3)
+2. **Vocab QA Agent** — LLM-as-judge pipeline step to fix POS errors, wrong translations, flag MWEs/idioms (addresses 4 user-reported issues, strong CV signal)
+3. **Topic extraction prompt** — expand from 1-2 words to 2-5 word phrases for better related reading
+4. **Translation alignment + toggle perf** — fix segment merge gap bug; optimize show/hide toggle
+5. **Shadowing mode** — auto-pause after each sentence for speaking practice (highest-value learning feature)
+
+**What NOT to touch first:**
+- Next.js / FastAPI — suspended, not the priority while the project is hobby-funded
+- Phase 7 AI features — premature
+- Alembic full migration — works today, not blocking anything
 
 ---
 
@@ -187,6 +213,7 @@ Workflow exists: GitHub Actions scheduled + manual run. See `docs/GITHUB_ACTIONS
 - [ ] **Store secrets in GitHub** — only if keeping scheduled ingest on Actions: `DATABASE_URL`, `YOUTUBE_API_KEY`, `OPENAI_API_KEY` (user action)
 - [ ] **Test** — trigger workflow manually if using Actions for ingest (user action)
 - [x] **VPS trial** — Vultr Amsterdam, Ubuntu 24.04, venv, `.env`, cron tested; **transcript IP block** → not used for ingest (destroy instance to save cost)
+- [ ] **Try `yt-dlp` for transcript fetching** — replace `youtube_transcript_api` in `scripts/ingest_playlist.py` with `yt-dlp --write-auto-sub`; test from VPS to see if it bypasses datacenter IP block; if it works, VPS becomes viable again for full pipeline
 - [x] **Local WSL cron** — weekdays 18:00 Europe/Amsterdam; `logs/pipeline.log`; verify tomorrow / tune UTC hour if needed (user ongoing)
 - [ ] **Disable or narrow GA schedule** — now that WSL owns ingest, avoid double-running pipeline against Neon (user action)
 
@@ -213,7 +240,43 @@ Implemented localStorage for Next.js so each visitor has their own known/learnin
 **Near-term client bug (before or with 6F):**
 - [ ] **`frontend/src/lib/api.ts` — session bootstrap retry:** If `GET /api/session` fails, **clear `_sessionPromise`** (and handle rejection) so the next call can retry. Today a rejected promise can stay cached and force a full reload.
 
-### Reddit Feedback — Bugs to Fix (This Week)
+### User Testing — Apr 3, 2026 (Dogfooding)
+
+Watched today's NOS Journaal in Makkelijke Taal as a user. Found 9 issues (3 UX bugs, 5 vocabulary quality, 1 content quality).
+
+#### UX Bugs
+
+- [ ] **Bubble status buttons broken** — Clicking "Learning" / "Known" in the transcript definition bubble does nothing visible (no shade, no save). Root cause: bubble is inside `st.components.v1.html` iframe; `<a target="_top">` with `?vocab_status_update=` query param likely fails on Streamlit Cloud due to iframe URL resolution. **Fix:** switch to `window.parent.postMessage` and handle in Streamlit, or convert to JS-only optimistic UI + `fetch` to the API.
+- [ ] **English translation misaligned with Dutch** — After segment merging, English translations don't line up with their Dutch sentences. Root cause: `merge_segments_into_sentences` skips empty `translation_en` (`if tr:` guard on line 378) instead of padding with empty string, so remaining translations shift up. **Fix:** always append `tr` (even empty) to `buf_translations` so the count stays aligned.
+- [ ] **Slow toggle for show/hide English translation** — Checkbox triggers full `_render_episode_detail_fragment` rerun (rebuilds all bubble HTML, vocab data, tabs). **Fix:** pre-build both with/without-translation HTML and toggle client-side with JS, or separate transcript into its own lighter `@st.fragment`.
+
+#### Vocabulary Quality (→ addressed by Vocab QA Agent below)
+
+- [ ] **"zorg voor" identified as only "zorg"** — Fixed preposition verbs (vast voorzetsel) like "zorgen voor" (lead to / take care of) are not recombined. The `SeparableVerbRecombiner` only handles particle verbs (scheidbare werkwoorden), not verb+preposition collocations.
+- [ ] **"stemmen" tagged as VERB, should be NOUN** — spaCy POS error: in context "stemmen" = "votes" (noun), not "to vote" (verb). No post-hoc POS correction layer exists.
+- [ ] **Idiom "ten slotte" not identified** — Multi-word expressions / fixed phrases are invisible to the per-token pipeline. Already in backlog but now confirmed as real user pain.
+- [ ] **"delen" shows wrong meaning** — "delen" = "to share" (verb) in context, but shows "parts" (noun). Same POS → wrong-translation pattern as "stemmen".
+
+#### Vocab QA Agent (new pipeline step — addresses #4/#5/#6/#7)
+
+- [ ] **Design: LLM-as-judge post-enrichment step** — After vocabulary extraction + enrichment, send each word + sentence context to GPT-4o-mini in batches. Ask: (1) Is the POS correct for this context? (2) Is the translation correct for this context? (3) Is this word part of a multi-word expression or idiom? (4) If MWE/idiom, what is the full expression and its meaning? Store corrections in `VocabularyItem` or a new `vocab_corrections` column. Cost: ~$0.01/episode.
+- [ ] **Implement `scripts/qa_vocab_llm.py`** — New pipeline step 8; runs after `enrich_vocab_llm.py`. Batch 20-30 words per API call with their example sentences. Output: corrected POS, corrected translation, flagged MWEs.
+- [ ] **Update `run_pipeline.sh`** — Add step 8 (vocab QA) after LLM enrichment.
+- [ ] **Backfill** — Run QA on existing episodes (incremental: only episodes not yet QA'd).
+
+#### Content Quality
+
+- [ ] **Topic extraction too narrow** — Topics are 1-2 words (e.g. "Groningen") instead of descriptive phrases (e.g. "gaswinning in Groningen"). Related reading results suffer. **Fix:** update prompt in `scripts/extract_topics.py` to request 2-5 word descriptive Dutch phrases; re-extract for recent episodes.
+
+#### Priority Order
+
+1. **Bubble status buttons** (critical: can't save words)
+2. **Topic extraction prompt** (quick win, immediate content improvement)
+3. **Translation alignment** (visible bug, small fix)
+4. **Translation toggle performance** (UX polish)
+5. **Vocab QA agent** (biggest value — fixes 4 issues, strong CV signal as LLM-as-judge pattern)
+
+### Reddit Feedback — Bugs to Fix (Mar 2026)
 
 Posted on r/learndutch; received positive feedback + concrete bug reports. See `docs/REDDIT_RESPONSE_GUIDE.md` for response drafts.
 
@@ -231,6 +294,7 @@ Posted on r/learndutch; received positive feedback + concrete bug reports. See `
 | Mini summary: 1-sentence NL + EN | New | — | LLM: episode summary (Dutch + English); display in header |
 | Difficulty labels (episode/sentence) | New | — | CEFR or frequency-based; integrate Subtlex-NL later |
 | "Listen first, reveal later" mode | New | — | Hide transcript by default; reveal on click/toggle |
+| **Shadowing mode** | New | — | Auto-pause after each sentence for speaking practice; auto (timed pause) + manual (button/spacebar) modes; raw subtitle segments preferred over merged sentences for shorter chunks; JS polls YouTube iframe every ~500ms to detect sentence boundaries |
 | Daily review from yesterday's words | Partial | Polish quiz to emphasize yesterday's saved words | — |
 | Known words storage (per-user) | 6E done | Next.js + Streamlit: anonymous sessions | Phase 6F: email auth (preferred UX) |
 
@@ -247,50 +311,49 @@ Posted on r/learndutch; received positive feedback + concrete bug reports. See `
 - Add **Mini summary** to backlog (medium impact, medium effort — LLM)
 - **Mobile UX** moved up: Streamlit polish for mobile, or document limitations
 
-### Phase 6F: Email Auth (Per-User Vocabulary — Preferred UX)
+### Phase 6F: Email Auth (Per-User Vocabulary — Preferred UX) ✅ MOSTLY DONE
 
-**Why:** Users shouldn't need to understand sessions (URL tokens, bookmarking, localStorage). Email signup gives a simple story: "Create account → your progress is saved everywhere." No explaining where data lives. *(Phase 6E anonymous sessions are done — see **Auth & per-user vocabulary** above.)*
+**Why:** Users shouldn’t need to understand sessions (URL tokens, bookmarking, localStorage). Email signup gives a simple story: “Create account → your progress is saved everywhere.” No explaining where data lives. *(Phase 6E anonymous sessions are done — see **Auth & per-user vocabulary** above.)*
 
-**Branch:** `feat/phase-6f-email-auth` (create after merging `feat/phase-6e-anonymous-sessions`)
+#### Commit 1: Database + models ✅ DONE
+- [x] Add `User` table: `id`, `email` (unique, indexed), `password_hash`, `created_at` — `src/models/db.py`
+- [x] Migration: `users` table via `_migrate_schema`; sequence starts at 1,000,000 to avoid collision with anonymous session ids
+- [x] Reserve `user_id=1` for legacy; anonymous sessions get id=2+; registered users get id>=1,000,000
+- [x] Export `User` from `src.models`
 
-#### Commit 1: Database + models
-- [ ] Add `User` table: `id`, `email` (unique, indexed), `password_hash`, `created_at`
-- [ ] Add migration: `users` table, `UserVocabulary.user_id` FK to `users.id` (or keep linking via new `user_id` column; `users.id` becomes the user_id for UserVocabulary)
-- [ ] Reserve `user_id=1` for legacy/anonymous; `user_id=2+` = registered users. `AnonymousSession` ids can stay separate — migration: when user signs up, copy `AnonymousSession`/legacy UserVocabulary rows to the new `User`'s id, then optionally delete anonymous rows
-- [ ] Export `User` from `src.models`
+#### Commit 2: Auth backend (FastAPI) ✅ DONE
+- [x] `POST /api/auth/register` — PBKDF2-SHA256 (werkzeug); returns JWT — `src/api/routes/auth.py`
+- [x] `POST /api/auth/login` — verify hash; return JWT
+- [ ] `POST /api/auth/logout` — not implemented server-side; client removes token from localStorage (acceptable for JWT)
+- [x] `GET /api/auth/me` — returns `user_id`, `email`
+- [x] Auth dependency: `get_current_user` + `get_current_user_optional` — `src/api/auth.py`
+- [x] `SECRET_KEY` required at startup; `ALLOW_INSECURE_DEV_JWT=1` for local dev only
+- [x] Rate-limit login/register: 10/minute per IP via `slowapi` — added Mar 2026
 
-#### Commit 2: Auth backend (FastAPI)
-- [ ] Choose auth lib: **FastAPI Users** (https://fastapi-users.github.io) or **Authlib** + JWT, or hand-roll with `passlib` + `python-jose`
-- [ ] `POST /api/auth/register` — email + password; hash with bcrypt/argon2; create User; return session token or set cookie
-- [ ] `POST /api/auth/login` — email + password; verify; return JWT or set HTTP-only cookie
-- [ ] `POST /api/auth/logout` — clear session
-- [ ] `GET /api/auth/me` — return current user (email, id) if authenticated
-- [ ] Auth dependency: `get_current_user(request) -> User | None`; protect vocab/episode routes — if authenticated, use `user.id`; else fall back to `X-Session-Token` (anonymous) or `user_id=1` (legacy)
-- [ ] Add `SECRET_KEY`, `JWT_ALGORITHM` (or similar) to env
+#### Commit 3: Next.js auth UI ✅ DONE
+- [x] Auth context: `useAuth()` — `user`, `login`, `register`, `logout`, `loading` — `frontend/src/contexts/AuthContext.tsx`
+- [x] Login page: `/login` — `frontend/src/app/login/page.tsx`
+- [x] Register page: `/register` — `frontend/src/app/register/page.tsx`
+- [x] Header: shows “Log in” / “Sign up” when anonymous; email + “Log out” when authenticated — `frontend/src/components/Header.tsx`
+- [x] Persist session: JWT in `localStorage`
+- [x] Send `Authorization: Bearer <token>` on API requests
+- [ ] Merge anonymous progress — not yet implemented (see Migration path below)
 
-#### Commit 3: Next.js auth UI
-- [ ] Auth context: `useAuth()` — `user`, `login`, `register`, `logout`, `loading`
-- [ ] Login page: `/login` — email + password form, call `POST /api/auth/login`
-- [ ] Register page: `/register` — email + password, call `POST /api/auth/register`
-- [ ] Header: show "Log in" / "Sign up" when anonymous; show "Log out" + email when authenticated
-- [ ] Persist session: JWT in `localStorage` or HTTP-only cookie (cookie is more secure; requires API to set it)
-- [ ] Send `Authorization: Bearer <token>` on API requests when logged in; backend prefers Bearer over `X-Session-Token`
-- [ ] Merge anonymous progress (default): explicit UX (“attach this device’s saved words to your account”) + idempotent API; pass anonymous token on register/login — align with **Migration path** below
+#### Commit 4: Streamlit auth ✅ DONE
+- [x] Login + register forms in sidebar — `app/main.py` (`_render_sidebar_auth`)
+- [x] JWT stored in `st.session_state`; user_id resolved via `_resolve_user_id`
 
-#### Commit 4: Streamlit auth (optional)
-- [ ] Streamlit has no native auth; options: (a) **Streamlit-Authenticator** (`pip install streamlit-authenticator`), (b) embed login in iframe and pass token via query param, (c) client-side only for Next.js; Streamlit stays anonymous with URL token
-- [ ] If supporting Streamlit auth: add login form in sidebar; store JWT in `st.session_state`; send token to API if Streamlit ever calls API directly, or keep Streamlit server-side DB access and use `User` id from session
+#### Migration path (anonymous → registered) — REMAINING
+**Default product choice:** **merge** anonymous progress into the registered account on signup/login.
 
-#### Migration path (anonymous → registered)
-**Default product choice:** **merge** anonymous progress into the registered account — least surprising for learners. Implementation: **explicit** UX copy + **idempotent** API (safe if called twice; define one conflict rule for same `vocabulary_id`, e.g. status precedence or newest `updated_at`).
-
-- [ ] When user registers/logs in: optional `anonymous_token` (or `X-Session-Token`); backend merges `UserVocabulary` from anonymous `user_id` into registered `user.id`; idempotent merge
-- [ ] Document in README: "Sign up to save progress across devices"
+- [ ] When user registers/logs in: pass anonymous token; backend merges `UserVocabulary` from anonymous `user_id` into registered `user.id`; idempotent (define conflict rule: e.g. keep newest `updated_at`)
+- [ ] UX copy: “We’ll attach your saved words to this account”
+- [ ] Document in README: “Sign up to save progress across devices”
 
 #### Security notes
-- [ ] Password: min 8 chars; use bcrypt or argon2
-- [ ] Rate-limit login/register (e.g. 5 attempts/min per IP)
-- [ ] Email verification (optional for MVP): send link to verify; mark `User.email_verified`
+- [x] Password: min 8 chars
+- [x] Rate-limit login/register: 10/min per IP (slowapi, Mar 2026)
+- [ ] Email verification (optional / future): send verification link; mark `User.email_verified`
 
 ### Phase 6D: VPN / NL egress (only if ingest still fails by IP)
 **If** the pipeline runs on a **NL or nearby EU VPS**, VPN is often unnecessary. Reserve this for **GitHub-hosted** ingest or non-EU hosts where transcript/geo still fails.
@@ -341,8 +404,8 @@ Merge to main when polished.
 - [ ] Fill missing `gloss_en` — LLM pass specifically targeting words without English translation
 - [ ] Validate dictionary entries — reject garbage (meaning = single inflected form,
       example = just the word itself, e.g. "helftes" → meaning "helft", example "helftes.")
-- [ ] Idiom detection + dictionary (Phase 7) — multi-word expressions, spaCy Matcher
-      or curated Dutch idiom list. High learning value for users.
+- [ ] Idiom detection + dictionary — multi-word expressions, spaCy Matcher
+      or curated Dutch idiom list. High learning value for users. **Confirmed pain point** (Apr 3 dogfooding: "ten slotte", "zorg voor"). Partially addressed by Vocab QA Agent (see User Testing Apr 3).
 
 **Platform:**
 - [ ] Clickable calendar view for episode selection by date
@@ -612,4 +675,19 @@ python scripts/convert_dictionary_to_sqlite.py
 
 ### Mar 25, 2026
 - **TODO hygiene** — **Current Status** aligned with Production roadmap (user-facing today vs engineering priority). **Auth section** deduped (one 6E→6F summary + Phase 6F checklist only). Backlog: removed stale “Phase 6E undone.” **Last Updated** 2026-03-25. Explicit item: Next.js **`_sessionPromise`** reset on `/api/session` failure (`frontend/src/lib/api.ts`). Roadmap typo: CI **tests only**, not “tests only for ingestion.”
+
+### Mar 26, 2026
+- **Code review session (Claude Code)** — Full review of codebase; project shared on r/learndutch, ~5 real users.
+- **Rate limiting added** — `slowapi` on `POST /api/auth/login` + `/api/auth/register` (10/min per IP). New file `src/api/ratelimit.py` to avoid circular import. Added to `requirements-api.txt`.
+- **Vultr VPS** — Set up, tested, YouTube transcript API blocked by datacenter IP → destroyed. WSL cron on owner PC is current production ingest path.
+- **Ingestion options documented** — Added `yt-dlp` as candidate replacement for `youtube_transcript_api` to TODO (test on VPS before paying for proxy).
+- **Windows Task Scheduler** — Discussed as fix for WSL not auto-starting on PC boot; no cron fires without it.
+- **Shadowing mode idea** — Designed with user: auto-pause after each sentence for speaking practice; two modes (auto-timed, manual); JS polls YouTube iframe ~500ms; raw subtitle segments preferred over merged sentences. Added to Product Ideas table.
+- **Phase 6F checklist updated** — Marked all completed items (DB, FastAPI auth, Next.js auth UI, Streamlit sidebar auth). Remaining: server-side logout endpoint, anonymous→registered progress merge, email verification (optional).
+- **TODO restructured** — Added “Start Here” block for new engineers at the top. Updated Last Updated date.
+
+### Apr 3, 2026
+- **Dogfooding session** -- Watched today's NOS episode. Found 9 issues across UX, vocabulary quality, and content.
+- **Vocab QA Agent designed** -- New LLM-as-judge pipeline step to fix POS errors, wrong translations, and flag MWEs/idioms. Addresses 4 of 9 issues.
+- **Priority** -- (1) bubble buttons, (2) topic prompt, (3) translation alignment, (4) toggle perf, (5) vocab QA agent.
 

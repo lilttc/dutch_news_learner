@@ -30,9 +30,11 @@ data/dutch_news.db
 # Node
 node_modules/
 
-# IDE
+# IDE / AI tools
 .idea/
 .vscode/
+.cursor/
+.claude/
 *.swp
 *.swo
 *~
