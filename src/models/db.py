@@ -153,6 +153,13 @@ class VocabularyItem(Base):
     frequency_rank = Column(Integer)  # From Subtlex-NL or similar (lower = more common)
     cefr_level = Column(String(10))  # A1, A2, B1, B2, C1, C2
 
+    # LLM-as-judge QA corrections (step 8 of pipeline).
+    # When set, the display layer uses these in preference to pos/translation.
+    qa_checked = Column(Boolean, default=False)  # True once this word has been QA'd
+    qa_pos = Column(String(20))          # Corrected POS (None = original was correct)
+    qa_translation = Column(Text)        # Context-corrected translation (None = original was correct)
+    qa_note = Column(Text)              # Free text: MWE/idiom info, e.g. "part of 'ten slotte' (finally)"
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -469,6 +476,11 @@ def _migrate_schema(engine):
             )""",
             "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_user_id ON user_episode_watches(user_id)",
             "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_episode_id ON user_episode_watches(episode_id)",
+            # Step 8: LLM-as-judge vocab QA corrections
+            _pg_add_column("vocabulary_items", "qa_checked", "BOOLEAN DEFAULT FALSE"),
+            _pg_add_column("vocabulary_items", "qa_pos", "TEXT"),
+            _pg_add_column("vocabulary_items", "qa_translation", "TEXT"),
+            _pg_add_column("vocabulary_items", "qa_note", "TEXT"),
         ]
     else:
         migrations = [
@@ -524,6 +536,11 @@ def _migrate_schema(engine):
             )""",
             "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_user_id ON user_episode_watches(user_id)",
             "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_episode_id ON user_episode_watches(episode_id)",
+            # Step 8: LLM-as-judge vocab QA corrections
+            "ALTER TABLE vocabulary_items ADD COLUMN qa_checked BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE vocabulary_items ADD COLUMN qa_pos TEXT",
+            "ALTER TABLE vocabulary_items ADD COLUMN qa_translation TEXT",
+            "ALTER TABLE vocabulary_items ADD COLUMN qa_note TEXT",
         ]
 
     for step, sql in enumerate(migrations):
