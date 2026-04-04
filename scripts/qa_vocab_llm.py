@@ -29,6 +29,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -52,6 +53,29 @@ BATCH_SIZE = 20
 MODEL = "gpt-4o-mini"
 MAX_RETRIES = 3
 RETRY_DELAY = 2
+
+EVAL_LOG = Path(__file__).resolve().parent.parent / "logs" / "qa_vocab_eval.jsonl"
+
+
+def _log_eval(word: dict, qa_pos: str | None, qa_translation: str | None, qa_note: str | None) -> None:
+    """Append one JSONL line per reviewed word to logs/qa_vocab_eval.jsonl.
+
+    Every word gets a line — corrections and clean passes alike — so you can
+    measure correction rate and audit model decisions over time.
+    """
+    record = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "lemma": word["lemma"],
+        "original_pos": word["pos"],
+        "original_translation": word["translation"],
+        "original_example": word["example"],
+        "qa_pos": qa_pos,               # None = model agreed with original
+        "qa_translation": qa_translation,
+        "qa_note": qa_note,
+    }
+    EVAL_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with EVAL_LOG.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def _build_prompt(words: list[dict]) -> str:
@@ -267,15 +291,21 @@ def main():
             new_translation = result.get("corrected_translation")
             note = result.get("mwe_note")
 
+            # Only store and count when the value genuinely differs from the original.
+            # The model sometimes returns the original instead of null — ignore those.
             if new_pos and isinstance(new_pos, str):
-                vocab_item.qa_pos = new_pos.strip()
-                corrected_pos += 1
-                print(f"    POS fix: {word['lemma']} {word['pos']} → {new_pos.strip()}")
+                new_pos = new_pos.strip().upper()
+                if new_pos != (word["pos"] or "").upper():
+                    vocab_item.qa_pos = new_pos
+                    corrected_pos += 1
+                    print(f"    POS fix: {word['lemma']} {word['pos']} → {new_pos}")
 
             if new_translation and isinstance(new_translation, str):
-                vocab_item.qa_translation = new_translation.strip()
-                corrected_translation += 1
-                print(f"    Translation fix: {word['lemma']} \"{word['translation']}\" → \"{new_translation.strip()}\"")
+                new_translation = new_translation.strip()
+                if new_translation.lower() != (word["translation"] or "").lower():
+                    vocab_item.qa_translation = new_translation
+                    corrected_translation += 1
+                    print(f"    Translation fix: {word['lemma']} \"{word['translation']}\" → \"{new_translation}\"")
 
             if note and isinstance(note, str):
                 vocab_item.qa_note = note.strip()
@@ -284,6 +314,13 @@ def main():
 
             vocab_item.qa_checked = True
             checked += 1
+
+            _log_eval(
+                word,
+                qa_pos=vocab_item.qa_pos,
+                qa_translation=vocab_item.qa_translation,
+                qa_note=vocab_item.qa_note,
+            )
 
         session.commit()
 
