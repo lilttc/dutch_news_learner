@@ -451,8 +451,12 @@ def build_vocab_bubble_data(
         lemma = v.lemma.lower()
         if lemma in EXCLUDE_LEMMAS:
             continue
-        dict_entry = lookup.lookup_with_example(v.lemma, v.pos)
-        gloss_nl = v.translation or (dict_entry.get("gloss") if dict_entry else None)
+        # Use QA-corrected POS/translation when available, fall back to originals
+        effective_pos = v.qa_pos or v.pos
+        effective_translation = v.qa_translation or v.translation
+
+        dict_entry = lookup.lookup_with_example(v.lemma, effective_pos)
+        gloss_nl = effective_translation or (dict_entry.get("gloss") if dict_entry else None)
         gloss_en = dict_entry.get("gloss_en") if dict_entry else None
         dict_example = dict_entry.get("example") if dict_entry else None
         example = dict_example or ev.example_sentence
@@ -464,13 +468,14 @@ def build_vocab_bubble_data(
         entry = {
             "vocabulary_id": v.id,
             "user_status": statuses_by_vid.get(v.id, "new"),
-            "pos": v.pos or "",
+            "pos": effective_pos or "",
             "lemma": v.lemma,
             "meaning": meaning,
             "meaning_en": gloss_en or "",
             "forms": forms,
             "example": example,
             "links": links,
+            "mwe_note": v.qa_note or "",
         }
         by_lemma.setdefault(lemma, []).append(entry)
 
@@ -573,6 +578,7 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
 .dnl-bubble-close:hover {{ color:#000; }}
 .dnl-bubble-title {{ font-weight:bold; font-size:16px; margin-bottom:8px; }}
 .dnl-bubble-section {{ margin:5px 0; }}
+.dnl-bubble-mwe {{ font-size:13px; color:#6a1b9a; margin-top:4px; }}
 .dnl-bubble-links {{ font-size:12px; margin-top:8px; }}
 .dnl-bubble-links a {{ color:#1f77b4; margin-right:6px; }}
 .dnl-bubble-status {{ margin-top:10px; padding-top:8px; border-top:1px solid #eee; display:flex; gap:6px; align-items:center; }}
@@ -620,6 +626,7 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
         html += '<div class="dnl-bubble-section"><strong>Forms:</strong> '+e.forms.join(', ')+'</div>';
       if (e.example)
         html += '<div class="dnl-bubble-section"><strong>Example:</strong> <em>'+e.example+'</em></div>';
+      if (e.mwe_note) html += '<div class="dnl-bubble-section dnl-bubble-mwe"><strong>Phrase:</strong> '+e.mwe_note+'</div>';
       if (e.links && Object.keys(e.links).length) {{
         var lnks = [];
         for (var k in e.links) lnks.push('<a href="'+e.links[k]+'" target="_blank" rel="noopener">'+k+'</a>');
