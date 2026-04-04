@@ -497,7 +497,7 @@ def build_vocab_bubble_data(
     return by_lemma
 
 
-def _transcript_html(segments, video_id, word_to_lemma, vocab_data, show_translation=True):
+def _transcript_html(segments, video_id, word_to_lemma, vocab_data):
     """Generate HTML with CSS hover tooltips + JS click-to-show bubble (rendered in iframe)."""
     merged = merge_segments_into_sentences(segments)
 
@@ -539,8 +539,8 @@ def _transcript_html(segments, video_id, word_to_lemma, vocab_data, show_transla
             f'<a href="#" class="ts-link" data-time="{sent["start_time"]}" data-url="{yt_url}">{ts}</a>'
             f'</span> {text}'
         )
-        if show_translation and sent["translation_en"]:
-            line_html += f'<div class="dnl-transcript-en">{sent["translation_en"]}</div>'
+        if sent["translation_en"]:
+            line_html += f'<div class="dnl-transcript-en" style="display:none">{sent["translation_en"]}</div>'
         line_html += '</div>'
         transcript_lines_html.append(line_html)
 
@@ -563,6 +563,7 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
 .dnl-transcript-ts a {{ color:inherit; cursor:pointer; text-decoration:none; }}
 .dnl-transcript-ts a:hover {{ text-decoration:underline; }}
 .dnl-transcript-en {{ color:#555; font-size:0.9em; margin-top:2px; }}
+.dnl-toggle {{ margin-bottom:10px; font-size:14px; cursor:pointer; user-select:none; }}
 .dnl-bubble {{ display:none; position:fixed; z-index:9999; background:#fff; border:1px solid #ccc;
   border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); padding:12px 16px;
   width:320px; max-width:calc(100vw - 32px); max-height:60vh; overflow-y:auto;
@@ -583,6 +584,7 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
 .dnl-bubble-hint {{ font-size:11px; color:#aaa; margin-top:6px; }}
 .dnl-overlay {{ position:fixed; inset:0; z-index:9998; }}
 </style>
+<label class="dnl-toggle"><input type="checkbox" id="dnl-show-translation"> Show English translation</label>
 {transcript_body}
 <div id="dnl-overlay" class="dnl-overlay" style="display:none;"></div>
 <div id="dnl-bubble" class="dnl-bubble">
@@ -656,6 +658,13 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
     return false;
   }}
 
+  document.getElementById('dnl-show-translation').addEventListener('change', function() {{
+    var show = this.checked;
+    document.querySelectorAll('.dnl-transcript-en').forEach(function(el) {{
+      el.style.display = show ? '' : 'none';
+    }});
+  }});
+
   document.addEventListener('click', function(ev) {{
     var ts = ev.target.closest('.ts-link');
     if (ts) {{ ev.preventDefault(); if (!seekVideo(parseFloat(ts.getAttribute('data-time')))) window.open(ts.getAttribute('data-url'),'_blank'); return; }}
@@ -666,7 +675,7 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
 </script>"""
 
 
-def render_transcript(segments, video_id, word_to_lemma=None, vocab_data=None, show_translation=True):
+def render_transcript(segments, video_id, word_to_lemma=None, vocab_data=None):
     """Render transcript in an iframe with clickable word bubbles and hover tooltips."""
     if not word_to_lemma or not vocab_data:
         merged = merge_segments_into_sentences(segments)
@@ -674,11 +683,11 @@ def render_transcript(segments, video_id, word_to_lemma=None, vocab_data=None, s
             ts = format_timestamp(sent["start_time"])
             yt_url = f"https://www.youtube.com/watch?v={video_id}&t={int(sent['start_time'])}s"
             st.markdown(f"**[{ts}]({yt_url})** {sent['text']}")
-            if show_translation and sent["translation_en"]:
+            if sent["translation_en"]:
                 st.caption(sent["translation_en"])
             st.markdown("")
         return
-    html = _transcript_html(segments, video_id, word_to_lemma, vocab_data, show_translation=show_translation)
+    html = _transcript_html(segments, video_id, word_to_lemma, vocab_data)
     estimated_height = 50 * len(merge_segments_into_sentences(segments))
     st.components.v1.html(html, height=min(800, max(400, estimated_height)), scrolling=True)
 
@@ -1027,11 +1036,6 @@ def render_vocabulary(episode_vocab_list, session=None, statuses=None,
 
 def _render_tab_transcript(episode, vocab_list, session, user_id: int):
     """Render the Transcript tab with clickable word bubbles inside the iframe."""
-    show_translation = st.checkbox(
-        "Show English translation",
-        value=False,
-        key="show_translation",
-    )
     st.caption(
         "Hover underlined words for a quick meaning. Click a word for its full definition."
     )
@@ -1056,7 +1060,6 @@ def _render_tab_transcript(episode, vocab_list, session, user_id: int):
         episode.video_id,
         word_to_lemma=word_to_lemma,
         vocab_data=vocab_data,
-        show_translation=show_translation,
     )
 
 

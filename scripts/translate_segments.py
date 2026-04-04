@@ -65,14 +65,30 @@ English translations (one per line):"""
         temperature=0.2,
     )
     result = response.choices[0].message.content.strip()
-    lines = [line.strip() for line in result.split("\n") if line.strip()]
-    # Remove leading numbers if model added them (e.g. "1. Hello" -> "Hello")
-    cleaned = []
-    for line in lines:
-        if line and line[0].isdigit() and ". " in line:
-            line = line.split(". ", 1)[1]
-        cleaned.append(line)
-    return cleaned[: len(texts)]  # Ensure we don't return more than we sent
+    # Parse by number so blank lines in the response don't shift subsequent translations.
+    # Build a dict {1: "...", 2: "...", ...} then reconstruct in order.
+    by_number: dict[int, str] = {}
+    unnumbered: list[str] = []
+    for line in result.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        if line[0].isdigit() and ". " in line:
+            raw_num, text = line.split(". ", 1)
+            try:
+                by_number[int(raw_num)] = text.strip()
+                continue
+            except ValueError:
+                pass
+        unnumbered.append(line)
+
+    if by_number:
+        # Numbered response: reconstruct in 1-based order, empty string for missing entries
+        cleaned = [by_number.get(i + 1, "") for i in range(len(texts))]
+    else:
+        # Fallback: unnumbered response, pad/truncate to match input length
+        cleaned = (unnumbered + [""] * len(texts))[: len(texts)]
+    return cleaned
 
 
 def translate_segments_for_episode(
@@ -80,6 +96,7 @@ def translate_segments_for_episode(
     episode: Episode,
     client: OpenAI,
     dry_run: bool = False,
+    force: bool = False,
 ) -> tuple[int, int]:
     """
     Translate segments for one episode. Returns (translated_count, skipped_count).
@@ -90,7 +107,10 @@ def translate_segments_for_episode(
         .order_by(SubtitleSegment.start_time)
         .all()
     )
-    to_translate = [s for s in segments if not s.translation_en or not s.translation_en.strip()]
+    if force:
+        to_translate = segments
+    else:
+        to_translate = [s for s in segments if not s.translation_en or not s.translation_en.strip()]
     if not to_translate:
         return 0, len(segments)
 
@@ -117,6 +137,7 @@ def translate_segments_for_episode(
 def main():
     parser = argparse.ArgumentParser(description="Translate subtitle segments to English via OpenAI")
     parser.add_argument("--all", action="store_true", help="Process all episodes (re-process even fully translated)")
+    parser.add_argument("--force", action="store_true", help="Re-translate segments that already have a translation (use after fixing pipeline bugs)")
     parser.add_argument("--max", type=int, metavar="N", help="Process only N most recent episodes")
     parser.add_argument("--episode-id", type=int, metavar="ID", help="Process only this episode")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be translated")
@@ -180,7 +201,7 @@ def main():
 
     for ep in episodes:
         print(f"[{ep.id}] {ep.title[:50]}...")
-        trans, skip = translate_segments_for_episode(session, ep, client, dry_run=args.dry_run)
+        trans, skip = translate_segments_for_episode(session, ep, client, dry_run=args.dry_run, force=args.force)
         total_translated += trans
         if trans or skip:
             print(f"  Translated: {trans} | Already had: {skip}")
