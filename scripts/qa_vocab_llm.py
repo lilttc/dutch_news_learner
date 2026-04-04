@@ -50,7 +50,7 @@ from src.models import (
 )
 
 BATCH_SIZE = 20
-DEFAULT_MODEL = "gpt-4o-mini"
+DEFAULT_MODEL = "gpt-4o"
 MAX_RETRIES = 3
 RETRY_DELAY = 2
 
@@ -88,18 +88,25 @@ def _build_prompt(words: list[dict]) -> str:
             lines.append(f'   Example: "{w["example"]}"')
 
     word_block = "\n".join(lines)
-    return f"""You are a Dutch linguistics expert reviewing vocabulary entries for a language-learning app.
+    return f"""You are a Dutch-English dictionary assistant reviewing vocabulary entries for a language-learning app.
 
-For each word below, check:
-1. Is the POS tag correct given the example sentence? (NOUN / VERB / ADJ / ADV)
-2. Is the translation correct for this specific context?
-3. Is this word part of a fixed multi-word expression or idiom (e.g. "ten slotte", "zorgen voor")?
+For each word below:
+1. Provide a short, natural English translation (2-6 words) that fits the example sentence context.
+   Output null if the existing translation is already correct and natural.
+2. Check if this word is part of a fixed Dutch multi-word expression or idiom (e.g. "ten slotte", "zorgen voor").
+   Output null if it is not part of one.
 
-Output a JSON array with one object per word, in the same order. Use null when the original is correct.
+Rules:
+- Translations MUST be in English only — never output Dutch.
+- Use the example sentence to pick the right sense when a word has multiple meanings.
+- Prefer the contextual meaning over the dictionary's primary meaning.
+- Do NOT correct POS tags — always output null for corrected_pos.
+
+Output a JSON array with one object per word, in the same order.
 Schema for each object:
-  "corrected_pos":         string or null  (e.g. "NOUN" — only if the original POS is wrong)
-  "corrected_translation": string or null  (e.g. "votes" — only if the original translation is wrong or missing)
-  "mwe_note":              string or null  (e.g. "part of 'ten slotte' (finally)" — only if MWE/idiom)
+  "corrected_pos":         null  (always null — do not change POS tags)
+  "corrected_translation": string or null  (e.g. "votes" — English only, null if original is fine)
+  "mwe_note":              string or null  (e.g. "part of 'ten slotte' (finally)" — null if not an MWE)
 
 Output ONLY the JSON array. No markdown, no explanations.
 
@@ -263,7 +270,6 @@ def main():
 
     client = OpenAI(api_key=api_key)
 
-    corrected_pos = 0
     corrected_translation = 0
     flagged_mwe = 0
     checked = 0
@@ -288,19 +294,11 @@ def main():
             if not vocab_item:
                 continue
 
-            new_pos = result.get("corrected_pos")
             new_translation = result.get("corrected_translation")
             note = result.get("mwe_note")
 
-            # Only store and count when the value genuinely differs from the original.
-            # The model sometimes returns the original instead of null — ignore those.
-            if new_pos and isinstance(new_pos, str):
-                new_pos = new_pos.strip().upper()
-                if new_pos != (word["pos"] or "").upper():
-                    vocab_item.qa_pos = new_pos
-                    corrected_pos += 1
-                    print(f"    POS fix: {word['lemma']} {word['pos']} → {new_pos}")
-
+            # Only store when the value genuinely differs from the original.
+            # The model sometimes echoes the original instead of null — ignore those.
             if new_translation and isinstance(new_translation, str):
                 new_translation = new_translation.strip()
                 if new_translation.lower() != (word["translation"] or "").lower():
@@ -335,7 +333,6 @@ def main():
     print("QA SUMMARY")
     print("=" * 60)
     print(f"Words reviewed:          {checked}")
-    print(f"POS corrections:         {corrected_pos}")
     print(f"Translation corrections: {corrected_translation}")
     print(f"MWE / idioms flagged:    {flagged_mwe}")
     if args.dry_run:

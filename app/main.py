@@ -451,13 +451,14 @@ def build_vocab_bubble_data(
         lemma = v.lemma.lower()
         if lemma in EXCLUDE_LEMMAS:
             continue
-        # Use QA-corrected POS/translation when available, fall back to originals
+        # Use QA-corrected POS when available, fall back to original
         effective_pos = v.qa_pos or v.pos
-        effective_translation = v.qa_translation or v.translation
 
         dict_entry = lookup.lookup_with_example(v.lemma, effective_pos)
-        gloss_nl = effective_translation or (dict_entry.get("gloss") if dict_entry else None)
-        gloss_en = dict_entry.get("gloss_en") if dict_entry else None
+        # Meaning: Dutch definition from Wiktionary (shown as "Meaning:" in bubble)
+        gloss_nl = (dict_entry.get("gloss") if dict_entry else None)
+        # English: QA-corrected translation > step-4 LLM translation > Wiktionary English
+        gloss_en = v.qa_translation or v.translation or (dict_entry.get("gloss_en") if dict_entry else None)
         dict_example = dict_entry.get("example") if dict_entry else None
         example = dict_example or ev.example_sentence
         meaning = gloss_nl or gloss_en or "(no definition)"
@@ -471,7 +472,7 @@ def build_vocab_bubble_data(
             "pos": effective_pos or "",
             "lemma": v.lemma,
             "meaning": meaning,
-            "meaning_en": gloss_en or "",
+            "meaning_en": gloss_en or "",  # English: qa_translation > step-4 > Wiktionary EN
             "forms": forms,
             "example": example,
             "links": links,
@@ -867,8 +868,8 @@ def _render_vocabulary_fragment(episode_id):
 
             with st.expander(label, expanded=auto_expand, key=f"vocab_exp_{episode_id}_{vid}"):
                 dict_entry = _cached_dict_lookup(v["lemma"], v["pos"])
-                gloss_nl = v["translation"] or (dict_entry.get("gloss") if dict_entry else None)
-                gloss_en = dict_entry.get("gloss_en") if dict_entry else None
+                gloss_nl = dict_entry.get("gloss") if dict_entry else None
+                gloss_en = v["translation"] or (dict_entry.get("gloss_en") if dict_entry else None)
                 dict_example = dict_entry.get("example") if dict_entry else None
 
                 if gloss_nl:
