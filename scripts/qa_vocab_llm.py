@@ -50,7 +50,7 @@ from src.models import (
 )
 
 BATCH_SIZE = 20
-MODEL = "gpt-4o-mini"
+DEFAULT_MODEL = "gpt-4o-mini"
 MAX_RETRIES = 3
 RETRY_DELAY = 2
 
@@ -109,7 +109,7 @@ Words:
 JSON array:"""
 
 
-def _qa_batch(client: OpenAI, words: list[dict]) -> list[dict]:
+def _qa_batch(client: OpenAI, words: list[dict], model: str) -> list[dict]:
     """
     Run QA on a batch of words. Returns one result dict per word.
     On failure returns a list of empty dicts (no corrections applied).
@@ -120,7 +120,7 @@ def _qa_batch(client: OpenAI, words: list[dict]) -> list[dict]:
     for attempt in range(MAX_RETRIES):
         try:
             response = client.chat.completions.create(
-                model=MODEL,
+                model=model,
                 messages=[
                     {
                         "role": "system",
@@ -225,6 +225,7 @@ def main():
         help="Max words to process in one run (default: 200)",
     )
     parser.add_argument("--episode-id", type=int, metavar="ID", help="Only check words from this episode")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help=f"OpenAI model to use (default: {DEFAULT_MODEL})")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be checked, no changes saved")
     parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var)")
     args = parser.parse_args()
@@ -255,7 +256,7 @@ def main():
     print("=" * 60)
     print(f"Total words not yet QA'd: {total_unchecked}")
     print(f"Processing this run:      {len(words)}")
-    print(f"Model: {MODEL} | Batch size: {BATCH_SIZE}")
+    print(f"Model: {args.model} | Batch size: {BATCH_SIZE}")
     if args.dry_run:
         print("(Dry run — no changes will be saved)")
     print()
@@ -280,7 +281,7 @@ def main():
             checked += len(batch)
             continue
 
-        results = _qa_batch(client, batch)
+        results = _qa_batch(client, batch, model=args.model)
 
         for word, result in zip(batch, results):
             vocab_item = session.query(VocabularyItem).get(word["id"])
