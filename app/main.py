@@ -773,12 +773,14 @@ def _get_episode_vocab_data(episode_id: int):
             {
                 "vocabulary_id": ev.vocabulary_item.id,
                 "lemma": ev.vocabulary_item.lemma,
-                "pos": ev.vocabulary_item.pos,
+                # Prefer QA-corrected POS/translation when available
+                "pos": ev.vocabulary_item.qa_pos or ev.vocabulary_item.pos,
+                "translation": ev.vocabulary_item.qa_translation or ev.vocabulary_item.translation,
+                "qa_note": ev.vocabulary_item.qa_note or "",
                 "occurrence_count": ev.occurrence_count or 0,
                 "example_sentence": ev.example_sentence,
                 "surface_forms": ev.surface_forms,
                 "example_timestamp": ev.example_timestamp,
-                "translation": ev.vocabulary_item.translation,
             }
             for ev in vocab_list
         ]
@@ -882,6 +884,9 @@ def _render_vocabulary_fragment(episode_id):
                 example_to_show = dict_example or v.get("example_sentence")
                 if example_to_show:
                     st.markdown(f"**Example:** *{example_to_show}*")
+
+                if v.get("qa_note"):
+                    st.markdown(f"**Phrase:** {v['qa_note']}")
 
                 if v.get("surface_forms"):
                     forms = [f.strip() for f in v["surface_forms"].split("|") if f.strip()]
