@@ -376,8 +376,7 @@ def merge_segments_into_sentences(segments):
             buf_start = seg.start_time
         buf_texts.append(text)
         tr = getattr(seg, "translation_en", None) or ""
-        if tr:
-            buf_translations.append(tr)
+        buf_translations.append(tr)
 
         if _SENTENCE_ENDERS.search(text):
             merged.append({
