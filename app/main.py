@@ -451,14 +451,15 @@ def build_vocab_bubble_data(
         lemma = v.lemma.lower()
         if lemma in EXCLUDE_LEMMAS:
             continue
-        # Use QA-corrected POS when available, fall back to original
-        effective_pos = v.qa_pos or v.pos
+        # Use QA-corrected POS when available, fall back to original.
+        # getattr guards against the qa_* columns not yet existing in the DB.
+        effective_pos = getattr(v, "qa_pos", None) or v.pos
 
         dict_entry = lookup.lookup_with_example(v.lemma, effective_pos)
         # Meaning: Dutch definition from Wiktionary (shown as "Meaning:" in bubble)
         gloss_nl = (dict_entry.get("gloss") if dict_entry else None)
         # English: QA-corrected translation > step-4 LLM translation > Wiktionary English
-        gloss_en = v.qa_translation or v.translation or (dict_entry.get("gloss_en") if dict_entry else None)
+        gloss_en = getattr(v, "qa_translation", None) or v.translation or (dict_entry.get("gloss_en") if dict_entry else None)
         dict_example = dict_entry.get("example") if dict_entry else None
         example = dict_example or ev.example_sentence
         meaning = gloss_nl or gloss_en or "(no definition)"
@@ -476,7 +477,7 @@ def build_vocab_bubble_data(
             "forms": forms,
             "example": example,
             "links": links,
-            "mwe_note": v.qa_note or "",
+            "mwe_note": getattr(v, "qa_note", None) or "",
         }
         by_lemma.setdefault(lemma, []).append(entry)
 
@@ -774,10 +775,11 @@ def _get_episode_vocab_data(episode_id: int):
             {
                 "vocabulary_id": ev.vocabulary_item.id,
                 "lemma": ev.vocabulary_item.lemma,
-                # Prefer QA-corrected POS/translation when available
-                "pos": ev.vocabulary_item.qa_pos or ev.vocabulary_item.pos,
-                "translation": ev.vocabulary_item.qa_translation or ev.vocabulary_item.translation,
-                "qa_note": ev.vocabulary_item.qa_note or "",
+                # Prefer QA-corrected POS/translation when available.
+                # getattr guards against qa_* columns not yet migrated in production DB.
+                "pos": getattr(ev.vocabulary_item, "qa_pos", None) or ev.vocabulary_item.pos,
+                "translation": getattr(ev.vocabulary_item, "qa_translation", None) or ev.vocabulary_item.translation,
+                "qa_note": getattr(ev.vocabulary_item, "qa_note", None) or "",
                 "occurrence_count": ev.occurrence_count or 0,
                 "example_sentence": ev.example_sentence,
                 "surface_forms": ev.surface_forms,
