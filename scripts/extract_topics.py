@@ -47,19 +47,21 @@ First lines of transcript:
 {transcript_preview[:600] if transcript_preview else "(none)"}"""
 
     prompt = f"""This is a NOS Journaal in Makkelijke Taal episode (Dutch news in easy language).
-Extract exactly 3 topic keywords for related news search. Use short Dutch search terms (1-2 words each).
-Examples: olie, fatbikes, Flevoland, klimaat, politie, Oekraïne.
+Extract exactly 3 descriptive Dutch search phrases for related NOS news article search.
+Each phrase should be 2-5 words that describe the specific topic, not a single vague word.
+Examples: "gaswinning in Groningen", "verbod op fatbikes", "oorlog in Oekraïne", "stijgende energieprijzen", "nieuwe klimaatwet".
+Avoid: single words like "klimaat", "politie", "olie" — be specific enough that a search will find relevant articles.
 
-Output exactly 3 keywords, one per line. No numbering, no explanations.
+Output exactly 3 phrases, one per line. No numbering, no explanations. Write in Dutch.
 
 {context}
 
-Topic keywords (one per line):"""
+Topic phrases (one per line):"""
 
     response = client.chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": "You extract news topic keywords. Output only 3 keywords, one per line."},
+            {"role": "system", "content": "You extract specific Dutch news topic phrases for search. Output only 3 phrases, one per line."},
             {"role": "user", "content": prompt},
         ],
         temperature=0.2,
@@ -111,6 +113,7 @@ def extract_topics_for_episode(session, episode: Episode, client: OpenAI, dry_ru
 def main():
     parser = argparse.ArgumentParser(description="Extract topic keywords for Related reading")
     parser.add_argument("--all", action="store_true", help="Process all episodes (re-extract even those with topics)")
+    parser.add_argument("--force", action="store_true", help="Re-extract episodes that already have topics (use after prompt changes)")
     parser.add_argument("--max", type=int, metavar="N", help="Process only N most recent episodes")
     parser.add_argument("--episode-id", type=int, metavar="ID", help="Process only this episode")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be extracted")
@@ -138,8 +141,8 @@ def main():
             print(f"Episode {args.episode_id} not found.")
             sys.exit(1)
     else:
-        # Incremental: only episodes missing topics
-        if not args.all:
+        # Incremental: only episodes missing topics (unless --all or --force)
+        if not args.all and not args.force:
             query = query.filter(
                 (Episode.topics.is_(None)) | (Episode.topics == "")
             )
