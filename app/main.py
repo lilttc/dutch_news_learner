@@ -459,7 +459,9 @@ def build_vocab_bubble_data(
         # Meaning: Dutch definition from Wiktionary (shown as "Meaning:" in bubble)
         gloss_nl = (dict_entry.get("gloss") if dict_entry else None)
         # English: QA-corrected translation > step-4 LLM translation > Wiktionary English
-        gloss_en = getattr(v, "qa_translation", None) or v.translation or (dict_entry.get("gloss_en") if dict_entry else None)
+        # Skip v.translation if it's identical to the Dutch gloss (Dutch leaked into translation field)
+        llm_translation = v.translation if v.translation and v.translation != gloss_nl else None
+        gloss_en = getattr(v, "qa_translation", None) or llm_translation or (dict_entry.get("gloss_en") if dict_entry else None)
         dict_example = dict_entry.get("example") if dict_entry else None
         example = dict_example or ev.example_sentence
         meaning = gloss_nl or gloss_en or "(no definition)"
@@ -623,7 +625,7 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
       if (e.lemma && e.lemma.toLowerCase() !== display.toLowerCase())
         html += '<div class="dnl-bubble-section"><strong>'+(e.pos==='VERB'?'Infinitive':'Base form')+':</strong> '+e.lemma+'</div>';
       html += '<div class="dnl-bubble-section"><strong>Meaning:</strong> '+(e.meaning||'')+'</div>';
-      if (e.meaning_en) html += '<div class="dnl-bubble-section"><strong>English:</strong> '+e.meaning_en+'</div>';
+      if (e.meaning_en && e.meaning_en !== e.meaning) html += '<div class="dnl-bubble-section"><strong>English:</strong> '+e.meaning_en+'</div>';
       if (e.forms && e.forms.length > 1)
         html += '<div class="dnl-bubble-section"><strong>Forms:</strong> '+e.forms.join(', ')+'</div>';
       if (e.example)
@@ -871,7 +873,8 @@ def _render_vocabulary_fragment(episode_id):
             with st.expander(label, expanded=auto_expand, key=f"vocab_exp_{episode_id}_{vid}"):
                 dict_entry = _cached_dict_lookup(v["lemma"], v["pos"])
                 gloss_nl = dict_entry.get("gloss") if dict_entry else None
-                gloss_en = v["translation"] or (dict_entry.get("gloss_en") if dict_entry else None)
+                llm_translation = v["translation"] if v["translation"] and v["translation"] != gloss_nl else None
+                gloss_en = llm_translation or (dict_entry.get("gloss_en") if dict_entry else None)
                 dict_example = dict_entry.get("example") if dict_entry else None
 
                 if gloss_nl:

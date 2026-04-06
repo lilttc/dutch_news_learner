@@ -6,6 +6,13 @@ Dutch News Learner ingests **NOS Journaal in Makkelijke Taal** episodes from You
 
 The project begins as a personal learning tool and is designed to evolve into a public language-learning platform.
 
+## Current Status
+
+- **Streamlit is the primary public app today.** It is live on Streamlit Community Cloud and is the main learning experience for users.
+- **Next.js + FastAPI exist as a secondary/demo frontend stack.** This path is implemented but currently not the main product while the Streamlit app is active.
+- **Pipeline and database:** Neon Postgres is the source of truth, and the daily pipeline is mainly run from WSL cron due to YouTube transcript IP restrictions from datacenter hosts.
+- **Low-cost operation:** Local SQLite is used for dictionary lookups, OpenAI enrichment is optional, and deployments are kept lightweight by design.
+
 ---
 
 ## Why This Project?
@@ -146,6 +153,15 @@ To keep the project focused, v1 intentionally avoids:
 
 ---
 
+## Cost-efficient design
+
+- Uses open-source tools and free tiers where possible.
+- `sqlite` dictionary fallback works offline without additional hosting cost.
+- OpenAI enrichment is optional and only used for missing translations.
+- Staging demo can run on low-cost cloud services or locally with minimal resources.
+
+---
+
 ## Project Structure
 
 ```
@@ -216,14 +232,14 @@ dutch_news_learner/
 
 ```bash
 # 1. Install dependencies
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 python -m spacy download nl_core_news_md
 
 # 2. Configure environment
 cp .env.example .env
-# Edit .env: DATABASE_URL (Neon Postgres), YOUTUBE_API_KEY, OPENAI_API_KEY (optional)
+# Edit .env: DATABASE_URL (Neon Postgres or local SQLite), YOUTUBE_API_KEY, OPENAI_API_KEY (optional)
 
-# 3. Download dictionary (one-time, ~118MB)
+# 3. Download or build dictionary (one-time)
 python scripts/download_dictionary.py
 python scripts/download_dictionary_en.py
 python scripts/convert_dictionary_to_sqlite.py
@@ -232,9 +248,9 @@ python scripts/convert_dictionary_to_sqlite.py
 python scripts/ingest_playlist.py --init-db --max-videos 5
 
 # 5. Extract vocabulary (with separable verb detection)
-python scripts/extract_vocabulary.py   # Incremental: only episodes missing vocabulary
+python scripts/extract_vocabulary.py
 
-# 6. Enrich translations (dictionary first, then LLM for gaps)
+# 6. Enrich translations (dictionary first, then optional LLM fallback)
 python scripts/enrich_vocabulary.py
 python scripts/enrich_vocab_llm.py --all   # Requires OPENAI_API_KEY
 
@@ -250,19 +266,16 @@ uvicorn src.api.main:app --port 8000 &
 cd frontend && npm run dev
 ```
 
-### Daily Pipeline
-
-The pipeline runs automatically via **GitHub Actions** (weekdays 18:00–20:00 UTC, weekends 18:15 UTC). No manual steps needed.
-
-For local runs:
+### Testing
 
 ```bash
-# Process new episodes (incremental: only what's missing)
-bash scripts/run_pipeline.sh
+pytest tests
+```
 
-# Re-process all or limit scope
-bash scripts/run_pipeline.sh --all      # Re-process everything
-bash scripts/run_pipeline.sh --max 5   # Limit to 5 newest per step
+
+python scripts/ingest_playlist.py --max-videos 5
+python scripts/extract_vocabulary.py
+python scripts/enrich_vocabulary.py
 ```
 
 **Source:** NOS Journaal in Makkelijke Taal channel uploads — Dutch news in easy language.

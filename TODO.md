@@ -17,10 +17,10 @@
 - Vocabulary export to CSV / Anki
 
 **Most important next actions (in order):**
-1. **Vocab QA Agent** — LLM-as-judge pipeline step to fix POS errors, wrong translations, flag MWEs/idioms (addresses 4 user-reported issues, strong CV signal)
-2. **Topic extraction prompt** — expand from 1-2 words to 2-5 word phrases for better related reading
-3. **Translation alignment + toggle perf** — fix segment merge gap bug; optimize show/hide toggle
-4. **Shadowing mode** — auto-pause after each sentence for speaking practice (highest-value learning feature)
+1. **Vocab QA backfill** ⚠️ IN PROGRESS — Run `python scripts/qa_vocab_llm.py --all` to QA remaining ~12,700 words (~$16.50, gpt-4o). 3 episodes already done (534, 535, 536). Do NOT interrupt mid-run.
+2. **feat/semantic-search** — pgvector episode search (next branch, see branch plan below)
+3. **Shadowing mode** — auto-pause after each sentence for speaking practice (highest-value learning feature)
+4. **Mobile/Android** — investigate empty page bug on Streamlit
 
 **What NOT to touch first:**
 - Next.js / FastAPI — suspended, not the priority while the project is hobby-funded
@@ -246,8 +246,8 @@ Watched today's NOS Journaal in Makkelijke Taal as a user. Found 9 issues (3 UX 
 #### UX Bugs
 
 - [x] **Bubble status buttons broken** — Resolved Apr 3. Status buttons cannot work cross-frame (iframe sandbox blocks parent navigation). **Solution:** read-only bubble with full definition, forms, examples, dictionary links, and styled status pills. Status changes stay in the Vocabulary tab. CSS hover tooltips for quick meaning. Surface form search + auto-expand in Vocabulary tab. Full app rerun after status change syncs transcript badges.
-- [ ] **English translation misaligned with Dutch** — After segment merging, English translations don't line up with their Dutch sentences. Root cause: `merge_segments_into_sentences` skips empty `translation_en` (`if tr:` guard on line 378) instead of padding with empty string, so remaining translations shift up. **Fix:** always append `tr` (even empty) to `buf_translations` so the count stays aligned.
-- [ ] **Slow toggle for show/hide English translation** — Checkbox triggers full `_render_episode_detail_fragment` rerun (rebuilds all bubble HTML, vocab data, tabs). **Fix:** pre-build both with/without-translation HTML and toggle client-side with JS, or separate transcript into its own lighter `@st.fragment`.
+- [x] **English translation misaligned with Dutch** — Fixed Apr 4 (branch fix/translation-alignment). Two-part fix: (1) `merge_segments_into_sentences` now always appends `tr` even when empty; (2) root cause was also in `translate_segments.py` — blank lines in API response caused shift; fixed by parsing numbered output by index. Re-translated all episodes with `--force`.
+- [x] **Slow toggle for show/hide English translation** — Fixed Apr 4. Moved checkbox into iframe as pure JS toggle — no Streamlit rerun. Translations always rendered (hidden by default), toggled instantly via `display` style.
 
 #### Vocabulary Quality (→ addressed by Vocab QA Agent below)
 
@@ -258,22 +258,53 @@ Watched today's NOS Journaal in Makkelijke Taal as a user. Found 9 issues (3 UX 
 
 #### Vocab QA Agent (new pipeline step — addresses #4/#5/#6/#7)
 
-- [ ] **Design: LLM-as-judge post-enrichment step** — After vocabulary extraction + enrichment, send each word + sentence context to GPT-4o-mini in batches. Ask: (1) Is the POS correct for this context? (2) Is the translation correct for this context? (3) Is this word part of a multi-word expression or idiom? (4) If MWE/idiom, what is the full expression and its meaning? Store corrections in `VocabularyItem` or a new `vocab_corrections` column. Cost: ~$0.01/episode.
-- [ ] **Implement `scripts/qa_vocab_llm.py`** — New pipeline step 8; runs after `enrich_vocab_llm.py`. Batch 20-30 words per API call with their example sentences. Output: corrected POS, corrected translation, flagged MWEs.
-- [ ] **Update `run_pipeline.sh`** — Add step 8 (vocab QA) after LLM enrichment.
-- [ ] **Backfill** — Run QA on existing episodes (incremental: only episodes not yet QA'd).
+- [x] **Implement `scripts/qa_vocab_llm.py`** — Done Apr 4 (branch feat/vocab-qa-agent). Pipeline step 8. Uses gpt-4o (default), batch 20 words, structured JSON output. Stores `qa_translation` and `qa_note` (MWE/idiom) on `VocabularyItem`. POS corrections disabled after testing showed unreliable results. Writes structured eval log to `logs/qa_vocab_eval.jsonl`. Supports `--model`, `--episode-id`, `--max`, `--all`, `--dry-run`.
+- [x] **Update `run_pipeline.sh`** — Step 8 added. Skipped if no OPENAI_API_KEY.
+- [x] **Display layer** — Bubble and vocab tab now prefer `qa_translation` over step-4 translation. MWE notes shown as "Phrase: ...". Dutch Meaning and English fields correctly separated.
+- [ ] **Backfill** ⚠️ IN PROGRESS — Episodes 534/535/536 done. Run `python scripts/qa_vocab_llm.py --all` for remaining ~12,700 words (~$16.50).
 
 #### Content Quality
 
-- [ ] **Topic extraction too narrow** — Topics are 1-2 words (e.g. "Groningen") instead of descriptive phrases (e.g. "gaswinning in Groningen"). Related reading results suffer. **Fix:** update prompt in `scripts/extract_topics.py` to request 2-5 word descriptive Dutch phrases; re-extract for recent episodes.
+- [x] **Topic extraction too narrow** — Fixed Apr 4 (branch improve/topic-extraction). Prompt now requests 2-5 word descriptive Dutch phrases (e.g. "gaswinning in Groningen"). Re-extracted 20 most recent episodes and re-fetched articles.
 
 #### Priority Order
 
 1. ~~**Bubble status buttons**~~ ✅ Done (Apr 3)
-2. **Vocab QA agent** (biggest value — fixes 4 issues, strong CV signal as LLM-as-judge pattern)
-3. **Topic extraction prompt** (quick win, immediate content improvement)
-4. **Translation alignment** (visible bug, small fix)
-5. **Translation toggle performance** (UX polish)
+2. ~~**Vocab QA agent**~~ ✅ Done (Apr 4) — backfill still running
+3. ~~**Topic extraction prompt**~~ ✅ Done (Apr 4)
+4. ~~**Translation alignment**~~ ✅ Done (Apr 4)
+5. ~~**Translation toggle performance**~~ ✅ Done (Apr 4)
+
+---
+
+## Pick Up Here (Apr 4, 2026)
+
+**Session summary:** Completed branches `fix/translation-alignment`, `improve/topic-extraction`, and `feat/vocab-qa-agent` (merged). Branch `feat/semantic-search` is next.
+
+### Immediate (before starting next branch)
+
+- [ ] **Finish vocab QA backfill** — Run `python scripts/qa_vocab_llm.py --all` from WSL. ~12,700 words remaining, ~$16.50, uses gpt-4o by default. Episodes 534/535/536 already done. The branch `feat/vocab-qa-agent` is already merged — this is just a data operation.
+- [ ] **Fix SQLAlchemy deprecation warning** — `session.query(VocabularyItem).get(word["id"])` in `scripts/qa_vocab_llm.py:293` should be `session.get(VocabularyItem, word["id"])`. Low priority but noisy in logs.
+
+### Next branch: `feat/semantic-search`
+
+pgvector episode search — lets users find episodes by meaning ("find episodes about immigration") rather than keyword. Planned scope:
+- Add `pgvector` extension to Neon Postgres
+- Embed episode title + description + transcript preview with `text-embedding-3-small`
+- Store embeddings on `Episode` table
+- New search endpoint / Streamlit UI widget
+- Backfill embeddings for existing episodes
+
+### Branch plan (remaining)
+
+| Order | Branch | Scope |
+|-------|--------|-------|
+| ✅ 1 | `fix/translation-alignment` | Translation alignment + JS toggle |
+| ✅ 2 | `improve/topic-extraction` | Better topic phrases |
+| ✅ 3 | `feat/vocab-qa-agent` | LLM-as-judge QA pipeline step |
+| 4 | `feat/semantic-search` | pgvector episode search |
+
+---
 
 ### Reddit Feedback — Bugs to Fix (Mar 2026)
 

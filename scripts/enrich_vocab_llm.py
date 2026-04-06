@@ -232,7 +232,7 @@ def main():
         for word, defn in zip(batch, definitions):
             if defn and defn.strip():
                 trimmed = defn.strip()[:200]
-                vocab_item = session.query(VocabularyItem).get(word["id"])
+                vocab_item = session.get(VocabularyItem, word["id"])
                 if vocab_item:
                     vocab_item.translation = trimmed
                     enriched += 1

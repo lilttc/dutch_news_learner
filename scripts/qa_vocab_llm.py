@@ -81,8 +81,9 @@ def _log_eval(word: dict, qa_pos: str | None, qa_translation: str | None, qa_not
 def _build_prompt(words: list[dict]) -> str:
     lines = []
     for i, w in enumerate(words, 1):
+        translation_str = w["translation"] if w["translation"] else "no translation available"
         lines.append(
-            f'{i}. "{w["lemma"]}" — POS: {w["pos"]}, translation: "{w["translation"]}"'
+            f'{i}. "{w["lemma"]}" — POS: {w["pos"]}, translation: "{translation_str}"'
         )
         if w.get("example"):
             lines.append(f'   Example: "{w["example"]}"')
@@ -122,7 +123,7 @@ def _qa_batch(client: OpenAI, words: list[dict], model: str) -> list[dict]:
     On failure returns a list of empty dicts (no corrections applied).
     """
     prompt = _build_prompt(words)
-    empty = [{"corrected_pos": None, "corrected_translation": None, "mwe_note": None}] * len(words)
+    empty = [{"corrected_pos": None, "corrected_translation": None, "mwe_note": None} for _ in words]
 
     for attempt in range(MAX_RETRIES):
         try:
@@ -215,7 +216,7 @@ def _get_words_to_check(session, max_words: int | None, all_words: bool, episode
             "id": r[0],
             "lemma": r[1],
             "pos": r[2] or "UNKNOWN",
-            "translation": r[3] or "(none)",
+            "translation": r[3] or "",
             "example": r[4] or "",
         }
         for r in rows
@@ -290,7 +291,7 @@ def main():
         results = _qa_batch(client, batch, model=args.model)
 
         for word, result in zip(batch, results):
-            vocab_item = session.query(VocabularyItem).get(word["id"])
+            vocab_item = session.get(VocabularyItem, word["id"])
             if not vocab_item:
                 continue
 

@@ -33,6 +33,13 @@ This document describes the system architecture, data flow, and design decisions
 
 ---
 
+## Production Readiness & Cost
+
+- The core ingestion, NLP, and serving layers are implemented and able to run locally with minimal resources.
+- Dictionary storage uses SQLite as a low-cost, low-memory offline backend with JSON fallback for developer convenience.
+- OpenAI enrichment is optional; the architecture works with dictionary-backed translation only.
+- The current serving model is Streamlit-first, with FastAPI and Next.js available as a secondary/demo stack.
+
 ## 2. Data Pipeline
 
 ### 2.1 Source Ingestion

@@ -40,10 +40,12 @@ def main():
     not_found = 0
 
     for item in items:
-        gloss = lookup.lookup(item.lemma, item.pos)
-        if gloss:
+        entry = lookup.lookup_with_example(item.lemma, item.pos)
+        # translation = English gloss (gloss_en), not the Dutch definition (gloss)
+        gloss_en = entry.get("gloss_en") if entry else None
+        if gloss_en:
             if not args.dry_run:
-                item.translation = gloss
+                item.translation = gloss_en
             updated += 1
         else:
             not_found += 1
