@@ -23,9 +23,9 @@ This document describes the system architecture, data flow, and design decisions
 │   ┌──────────────────────────────────────────────────────────────────────┐  │
 │   │                     SERVING LAYER                                      │  │
 │   │                                                                       │  │
-│   │   FastAPI (REST)  ◀──────▶  Streamlit (Web UI)                         │  │
+│   │   Streamlit (primary, live)      FastAPI + Next.js (suspended)        │  │
+│   │   Hits Postgres directly         REST API for portfolio frontend       │  │
 │   │                                                                       │  │
-│   │   Endpoints: episodes, vocabulary, quiz, user-progress                 │  │
 │   └──────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -130,7 +130,7 @@ spaCy Doc (tokenized sentence)
 
 ### 2.4 Vocabulary Enrichment
 
-Three-tier translation pipeline fills `VocabularyItem.translation`:
+Four-tier pipeline fills and validates `VocabularyItem.translation`:
 
 ```
 Candidate vocabulary (lemma + POS + example sentence)
@@ -138,19 +138,29 @@ Candidate vocabulary (lemma + POS + example sentence)
         ▼
 ┌───────────────────────────────┐
 │ Tier 1: Wiktionary Dictionary │  POS-aware lookup (NL + EN editions)
-│ (dutch_glosses.db — SQLite)   │  Covers base forms reliably
+│ (dutch_glosses.db — SQLite)   │  enrich_vocabulary.py → translation field
+│                               │  Covers base forms; free, no API call
 └─────────────┬─────────────────┘
-              │ words with no match
+              │ words with no English gloss
               ▼
 ┌───────────────────────────────┐
-│ Tier 2: LLM Enrichment       │  GPT-4o-mini, batches of 25
-│ (enrich_vocab_llm.py)        │  Uses POS + example sentence for context
+│ Tier 2: LLM Enrichment        │  GPT-4o-mini, batches of 25
+│ (enrich_vocab_llm.py)         │  Uses POS + example sentence for context
 │                               │  Fills inflected forms, rare words
+└─────────────┬─────────────────┘
+              │ all words
+              ▼
+┌───────────────────────────────┐
+│ Tier 3: LLM QA Agent          │  GPT-4o, batches of 20
+│ (qa_vocab_llm.py)             │  Reviews translation for correctness
+│                               │  Corrections stored in qa_translation,
+│                               │  qa_pos, qa_note (display layer prefers
+│                               │  these over the original fields)
 └─────────────┬─────────────────┘
               │ still no match
               ▼
 ┌───────────────────────────────┐
-│ Tier 3: Manual Lookup Links   │  Mijnwoordenboek, Woorden.org, Wiktionary
+│ Tier 4: Manual Lookup Links   │  Mijnwoordenboek, Woorden.org, Wiktionary
 │ (shown in definition bubble)  │  User clicks to look up externally
 └───────────────────────────────┘
 ```
@@ -172,17 +182,17 @@ Episode 3 vocab ──┤    → episode_count, total_count
 ```
 Episode (title, description, transcript)
         │
-        ├─────────────────────────────────────┐
-        │                                     │
-        ▼                                     ▼
-┌───────────────────┐               ┌───────────────────┐
-│ translate_segments │               │ extract_topics    │
-│ (OpenAI)          │               │ (OpenAI)          │
-│ → SubtitleSegment │               │ → Episode.topics   │
-│   .translation_en │               │   (pipe-separated)│
-└───────────────────┘               └─────────┬─────────┘
-                                              │
-                                              ▼
+        ├─────────────────────────────────────┬────────────────────────┐
+        │                                     │                        │
+        ▼                                     ▼                        ▼
+┌───────────────────┐               ┌───────────────────┐   ┌──────────────────┐
+│ translate_segments │               │ extract_topics    │   │ qa_vocab_llm     │
+│ (GPT-4o-mini)     │               │ (GPT-4o-mini)     │   │ (GPT-4o)         │
+│ → SubtitleSegment │               │ → Episode.topics  │   │ → VocabularyItem │
+│   .translation_en │               │   (pipe-separated)│   │   .qa_translation│
+│   (toggle in UI)  │               └─────────┬─────────┘   │   .qa_pos        │
+└───────────────────┘                         │              │   .qa_note       │
+                                              ▼              └──────────────────┘
                                     Related reading: DuckDuckGo search
                                     site:nos.nl, date ±7 days
 ```
@@ -201,11 +211,15 @@ Episode (title, description, transcript)
 │ video_id         │   │   │ episode_id (FK)      │       │ lemma (unique)    │
 │ title            │   └──│ start_time           │       │ pos               │
 │ published_at     │      │ duration             │       │ translation       │
-│ thumbnail_url    │      │ text                 │       │ frequency_rank    │
-│ topics           │      │ translation_en       │       │ cefr_level        │
-│ related_articles │      └─────────────────────┘       └────────┬─────────┘
+│ thumbnail_url    │      │ text                 │       │ qa_translation    │
+│ topics           │      │ translation_en       │       │ qa_pos            │
+│ related_articles │      └─────────────────────┘       │ qa_note           │
+└────────┬─────────┘                                    │ qa_checked        │
+         │                                              │ frequency_rank    │
+         │                                              │ cefr_level        │
+         │                                              └────────┬─────────┘
 └────────┬─────────┘                                              │
-         │              ┌─────────────────────┐                   │
+         │              ┌─────────────────────┐
          │              │ EpisodeVocabulary   │                   │
          └──────────────│ episode_id (FK)     │◀──────────────────┘
                         │ vocabulary_id (FK)  │
@@ -243,7 +257,7 @@ Episode (title, description, transcript)
 |-------|---------|
 | **Episode** | One NOS Journaal video. Stores YouTube metadata, summary, publish date, topics (pipe-separated for Related reading). |
 | **SubtitleSegment** | One subtitle line. Text, start/end timestamps, optional translation_en (LLM), links to episode. |
-| **VocabularyItem** | Master vocabulary. Lemma, POS, translation, frequency rank, CEFR. |
+| **VocabularyItem** | Master vocabulary. Lemma, POS, translation, frequency rank, CEFR. QA fields (qa_translation, qa_pos, qa_note, qa_checked) store LLM-reviewed corrections; display layer prefers these over originals. |
 | **EpisodeVocabulary** | Junction: which words appear in which episode, with counts and examples. |
 | **UserVocabulary** | User's relationship to each word: status, review dates, quiz performance. |
 | **QuizSession** | One quiz attempt. Date, score, duration. |
@@ -384,7 +398,8 @@ app/
 | **youtube-transcript-api** | Subtitle extraction | No key required |
 | **spaCy nl_core_news_md** | Dutch NLP (tokenize, lemmatize, POS, dep parse) | ~50MB model |
 | **Wiktionary NL + EN** | Dictionary (glosses, POS-aware) | Downloaded once, stored as SQLite |
-| **OpenAI API (GPT-4o-mini)** | Segment translation, topic extraction, vocab enrichment | Optional but recommended |
+| **OpenAI API (GPT-4o-mini)** | Segment translation, topic extraction, vocab gap-filling | Optional but recommended |
+| **OpenAI API (GPT-4o)** | Vocabulary QA agent — reviews and corrects translations | Optional, higher quality |
 | **DuckDuckGo (ddgs)** | Related NOS article search | No key required, rate-limited with backoff |
 
 ---
@@ -393,12 +408,13 @@ app/
 
 ### 7.1 Current Deployment
 
-- **Single user** — No auth required
-- **PostgreSQL (Neon)** — Cloud database, shared by Streamlit, pipeline, API
+- **Auth** — Email-based auth implemented (Streamlit sidebar + FastAPI + Next.js)
+- **PostgreSQL (Neon)** — Cloud database, shared by Streamlit app and pipeline
 - **SQLite fallback** — Local dev when `DATABASE_URL` not set
-- **Dictionary** — Local SQLite file (read-only, not migrated)
-- **Local run** — `streamlit run app/main.py`
-- **Pipeline** — `run_pipeline.sh` (incremental by default); GitHub Actions planned
+- **Dictionary** — Local SQLite file (`dutch_glosses.db`, read-only)
+- **Streamlit Cloud** — Primary deployment; auto-deploys from `main` branch
+- **FastAPI + Next.js** — Secondary/portfolio stack, currently suspended on Render/Vercel
+- **Pipeline** — `run_pipeline.sh` runs via WSL cron on owner's PC (weekdays 18:00 Amsterdam)
 
 ### 7.2 Public Platform (Future)
 
@@ -419,6 +435,7 @@ app/
 | Streamlit for MVP | Rapid iteration, Python-only |
 | Next.js for public app | Modern UX, Vercel hosting, dark mode |
 | Dictionary + LLM fallback | Dictionary covers base forms cheaply; LLM fills inflected/rare words |
+| LLM-as-judge QA | GPT-4o reviews translations post-hoc; corrections in separate qa_* fields preserve audit trail |
 | Separable verb recombiner | Dep parsing + heuristic + dictionary validation avoids false positives |
 | Template quizzes first | Reliable, no LLM cost, validates core loop |
 | Frequency-based ranking | Recurring words = high-value learning targets |
@@ -430,6 +447,8 @@ app/
 
 - **Spaced repetition** — Replace simple queue with SM-2 or similar
 - **Topic clustering** — Group vocabulary by news topic
-- **Export to Anki** — Generate Anki decks from saved vocabulary
+- **Shadowing mode** — Auto-pause after each sentence for speaking practice
+- **Semantic search** — pgvector episode search by topic/theme
 - **Listening mode** — Audio-only quiz, pronunciation practice
 - **CEFR placement** — Estimate user level from known words
+- **Mobile** — Investigate empty page bug on Android/Streamlit

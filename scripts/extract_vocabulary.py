@@ -183,7 +183,7 @@ def run_extraction(
         print(f"[{idx}/{len(episodes)}] {episode.title[:50]}...")
         print(f"  Episode ID: {episode.id} | Video: {episode.video_id}")
 
-        print(f"  Loading segments...", flush=True)
+        print("  Loading segments...", flush=True)
         episode.subtitle_segments  # Trigger lazy load
         print(f"  Segments loaded: {len(episode.subtitle_segments)}", flush=True)
 
@@ -196,9 +196,9 @@ def run_extraction(
             session.commit()
             total_items += items
             total_rows += rows
-            print(f"  ✅ Extracted {rows} vocabulary entries ({items} new lemmas)")
+            print(f"  Done: {rows} vocabulary entries ({items} new lemmas)")
         except Exception as e:
-            print(f"  ❌ ERROR: {e}")
+            print(f"  ERROR: {e}")
             session.rollback()
 
         print()
@@ -206,15 +206,11 @@ def run_extraction(
     session.close()
 
     print("=" * 70)
-    print("📊 EXTRACTION SUMMARY")
+    print("EXTRACTION SUMMARY")
     print("=" * 70)
     print(f"Episodes processed: {len(episodes)}")
     print(f"EpisodeVocabulary rows: {total_rows}")
     print(f"New VocabularyItems: {total_items}")
-    print()
-    print("Next steps:")
-    print("  1. Build learning interface (Phase 3)")
-    print("  2. Add daily quiz (Phase 4)")
 
 
 if __name__ == "__main__":
