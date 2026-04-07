@@ -17,10 +17,9 @@
 - Vocabulary export to CSV / Anki
 
 **Most important next actions (in order):**
-1. **Vocab QA backfill** ⚠️ IN PROGRESS — Run `python scripts/qa_vocab_llm.py --all` to QA remaining ~12,700 words (~$16.50, gpt-4o). 3 episodes already done (534, 535, 536). Do NOT interrupt mid-run.
-2. **feat/semantic-search** — pgvector episode search (next branch, see branch plan below)
-3. **Shadowing mode** — auto-pause after each sentence for speaking practice (highest-value learning feature)
-4. **Mobile/Android** — investigate empty page bug on Streamlit
+1. **feat/semantic-search** — pgvector episode search (next branch, see branch plan below)
+2. **Shadowing mode** — auto-pause after each sentence for speaking practice (highest-value learning feature)
+3. **Mobile/Android** — investigate empty page bug on Streamlit
 
 **What NOT to touch first:**
 - Next.js / FastAPI — suspended, not the priority while the project is hobby-funded

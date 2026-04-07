@@ -459,9 +459,7 @@ def build_vocab_bubble_data(
         # Meaning: Dutch definition from Wiktionary (shown as "Meaning:" in bubble)
         gloss_nl = (dict_entry.get("gloss") if dict_entry else None)
         # English: QA-corrected translation > step-4 LLM translation > Wiktionary English
-        # Skip v.translation if it's identical to the Dutch gloss (Dutch leaked into translation field)
-        llm_translation = v.translation if v.translation and v.translation != gloss_nl else None
-        gloss_en = getattr(v, "qa_translation", None) or llm_translation or (dict_entry.get("gloss_en") if dict_entry else None)
+        gloss_en = getattr(v, "qa_translation", None) or v.translation or (dict_entry.get("gloss_en") if dict_entry else None)
         dict_example = dict_entry.get("example") if dict_entry else None
         example = dict_example or ev.example_sentence
         meaning = gloss_nl or gloss_en or "(no definition)"
@@ -873,8 +871,7 @@ def _render_vocabulary_fragment(episode_id):
             with st.expander(label, expanded=auto_expand, key=f"vocab_exp_{episode_id}_{vid}"):
                 dict_entry = _cached_dict_lookup(v["lemma"], v["pos"])
                 gloss_nl = dict_entry.get("gloss") if dict_entry else None
-                llm_translation = v["translation"] if v["translation"] and v["translation"] != gloss_nl else None
-                gloss_en = llm_translation or (dict_entry.get("gloss_en") if dict_entry else None)
+                gloss_en = v["translation"] or (dict_entry.get("gloss_en") if dict_entry else None)
                 dict_example = dict_entry.get("example") if dict_entry else None
 
                 if gloss_nl:
