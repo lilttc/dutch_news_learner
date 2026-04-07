@@ -43,6 +43,9 @@ node_modules/
 .DS_Store
 Thumbs.db
 
+# Internal docs (not for public repo)
+TODO.md
+
 # Logs
 logs/
 *.log
