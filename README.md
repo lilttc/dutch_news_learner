@@ -71,11 +71,12 @@ Users can mark words as: **known** | **learning** | **new**
 
 ### Vocabulary Enrichment
 
-Three-tier translation pipeline ensures high coverage:
+Four-tier translation pipeline ensures high coverage and quality:
 
-1. **Wiktionary dictionary** (NL + EN editions, stored as SQLite) — covers base forms
-2. **LLM fallback** (GPT-4o-mini) — fills gaps for inflected forms, rare words
-3. **Manual lookup links** (Mijnwoordenboek, Woorden.org, Wiktionary)
+1. **Wiktionary dictionary** (NL + EN editions, stored as SQLite) — covers base forms, free
+2. **LLM gap-fill** (GPT-4o-mini) — fills missing translations for inflected forms and rare words
+3. **LLM QA agent** (GPT-4o) — reviews all translations, corrects errors, flags multi-word expressions
+4. **Manual lookup links** (Mijnwoordenboek, Woorden.org, Wiktionary) — shown in the definition bubble
 
 ### Personal Vocabulary Tracker
 
@@ -94,17 +95,6 @@ Track how often words appear across multiple news episodes:
 > **inflatie** — Seen in 6 episodes · Seen 14 times · Last seen: 2026-03-12
 
 Recurring vocabulary highlights important real-world words.
-
-### Daily Vocabulary Quiz
-
-Quiz questions generated from:
-
-- New words from the latest episode
-- Saved vocabulary
-- Frequently recurring words
-- Previously incorrect answers
-
-Example: *What does "maatregel" mean?* → A. election · B. measure · C. village · D. warning
 
 ### Episode Archive
 
@@ -136,7 +126,7 @@ To keep the project focused, v1 intentionally avoids:
 | Database | PostgreSQL (Neon) + SQLite (dictionary) |
 | NLP | spaCy (nl_core_news_md), separable verb recombination |
 | Dictionary | Wiktionary NL + EN editions (POS-aware, SQLite) |
-| LLM | OpenAI GPT-4o-mini (translation, topic extraction, vocab enrichment) |
+| LLM | OpenAI GPT-4o-mini (segment translation, topic extraction, vocab gap-fill) + GPT-4o (vocab QA) |
 | Ingestion | youtube-transcript-api, YouTube Data API v3 |
 | Search | DuckDuckGo (related NOS articles) |
 | Frontend (primary) | Streamlit |
@@ -188,13 +178,14 @@ dutch_news_learner/
 │       └── routes/                     # episodes, vocabulary endpoints
 │
 ├── scripts/
-│   ├── run_pipeline.sh                 # Daily pipeline (7 steps, one command)
+│   ├── run_pipeline.sh                 # Daily pipeline (8 steps, one command)
 │   ├── ingest_playlist.py              # Ingest NOS episodes from YouTube
 │   ├── extract_vocabulary.py           # spaCy NLP + separable verb detection
 │   ├── enrich_vocabulary.py            # Dictionary-based translation fill
 │   ├── enrich_vocab_llm.py             # LLM fallback for missing translations
 │   ├── translate_segments.py           # Segment translation (OpenAI)
 │   ├── extract_topics.py              # Topic extraction (OpenAI)
+│   ├── qa_vocab_llm.py                 # LLM-as-judge vocab QA (GPT-4o)
 │   ├── fetch_related_articles.py       # DuckDuckGo NOS article search
 │   ├── download_dictionary.py          # NL Wiktionary download
 │   ├── download_dictionary_en.py       # EN Wiktionary Dutch entries
@@ -254,9 +245,10 @@ python scripts/extract_vocabulary.py
 python scripts/enrich_vocabulary.py
 python scripts/enrich_vocab_llm.py --all   # Requires OPENAI_API_KEY
 
-# 7. (Optional) Segment translation & topic extraction
+# 7. (Optional) Segment translation, topic extraction & vocab QA
 python scripts/translate_segments.py
 python scripts/extract_topics.py
+python scripts/qa_vocab_llm.py             # Requires OPENAI_API_KEY
 
 # 8. Start the learning app
 streamlit run app/main.py
@@ -272,12 +264,6 @@ cd frontend && npm run dev
 pytest tests
 ```
 
-
-python scripts/ingest_playlist.py --max-videos 5
-python scripts/extract_vocabulary.py
-python scripts/enrich_vocabulary.py
-```
-
 **Source:** NOS Journaal in Makkelijke Taal channel uploads — Dutch news in easy language.
 
 ---
@@ -291,12 +277,14 @@ python scripts/enrich_vocabulary.py
 | **3** | Learning interface (episode viewer, clickable vocab, translation toggle) | ✅ Done |
 | **3.5** | Related reading (topic extraction, date-filtered NOS links) | ✅ Done |
 | **4** | Next.js + FastAPI migration, deployment (Vercel + Render + Streamlit Cloud) | ✅ Done |
-| **5A** | Vocabulary quality (LLM enrichment, separable verb detection) | ✅ Done |
+| **5A** | Vocabulary quality (LLM enrichment, separable verb detection, QA agent) | ✅ Done |
 | **5B** | Video-transcript UX (in-page timestamp seeking) | ✅ Done |
-| **5C** | Quiz system (translation multiple choice, spaced repetition) | Up next |
 | **6A** | PostgreSQL (Neon) + cloud migration | ✅ Done |
-| **6B** | GitHub Actions daily pipeline | ✅ Done |
+| **6B** | Daily pipeline (WSL cron — GitHub Actions blocked by YouTube IP restrictions) | ✅ Done |
 | **6C** | User auth + proper hosting | Planned |
+| **Next** | Shadowing mode (auto-pause per sentence for speaking practice) | Up next |
+| **Next** | Semantic episode search (pgvector) | Up next |
+| **Next** | Quiz system (translation multiple choice, spaced repetition) | Planned |
 | **7** | AI features (RAG search, AI explanations) | Future |
 
 ---
