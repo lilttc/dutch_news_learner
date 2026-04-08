@@ -227,6 +227,36 @@ def _get_words_to_check(session, max_words: int | None, all_words: bool, episode
     ]
 
 
+def _apply_qa_result(vocab_item, word: dict, result: dict) -> tuple[bool, bool]:
+    """
+    Write QA corrections from result onto vocab_item.
+
+    Returns (translation_changed, mwe_flagged). Separated from main() for testability.
+
+    Echo detection: if the model returns the same translation it was given,
+    treat it as null (no correction). The model sometimes echoes the original
+    instead of returning null.
+    """
+    translation_changed = False
+    mwe_flagged = False
+
+    new_translation = result.get("corrected_translation")
+    note = result.get("mwe_note")
+
+    # Only store when the value genuinely differs from the original.
+    if new_translation and isinstance(new_translation, str):
+        new_translation = new_translation.strip()
+        if new_translation.lower() != (word["translation"] or "").lower():
+            vocab_item.qa_translation = new_translation
+            translation_changed = True
+
+    if note and isinstance(note, str):
+        vocab_item.qa_note = note.strip()
+        mwe_flagged = True
+
+    return translation_changed, mwe_flagged
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="LLM-as-judge QA: fix POS errors, wrong translations, flag idioms"
@@ -299,22 +329,13 @@ def main():
             if not vocab_item:
                 continue
 
-            new_translation = result.get("corrected_translation")
-            note = result.get("mwe_note")
-
-            # Only store when the value genuinely differs from the original.
-            # The model sometimes echoes the original instead of null - ignore those.
-            if new_translation and isinstance(new_translation, str):
-                new_translation = new_translation.strip()
-                if new_translation.lower() != (word["translation"] or "").lower():
-                    vocab_item.qa_translation = new_translation
-                    corrected_translation += 1
-                    print(f"    Translation fix: {word['lemma']} \"{word['translation']}\" → \"{new_translation}\"")
-
-            if note and isinstance(note, str):
-                vocab_item.qa_note = note.strip()
+            translation_changed, mwe_flagged_item = _apply_qa_result(vocab_item, word, result)
+            if translation_changed:
+                corrected_translation += 1
+                print(f"    Translation fix: {word['lemma']} \"{word['translation']}\" -> \"{vocab_item.qa_translation}\"")
+            if mwe_flagged_item:
                 flagged_mwe += 1
-                print(f"    MWE/idiom: {word['lemma']} - {note.strip()}")
+                print(f"    MWE/idiom: {word['lemma']} - {vocab_item.qa_note}")
 
             vocab_item.qa_checked = True
             checked += 1
