@@ -7,7 +7,7 @@ and stores the top results (title + URL + snippet) in Episode.related_articles
 as JSON. This gives learners direct links to real Dutch news articles about the
 episode's topics.
 
-No API keys required — uses the ddgs (DuckDuckGo Search) library.
+No API keys required - uses the ddgs (DuckDuckGo Search) library.
 
 Usage:
     python scripts/fetch_related_articles.py              # Episodes with topics but no articles
@@ -54,7 +54,7 @@ def search_nos_articles(
     Args:
         query: Search query (topic keyword).
         num_results: Maximum number of results to return.
-        timelimit: Date filter — standard ("d","w","m","y") or Google cdr format
+        timelimit: Date filter - standard ("d","w","m","y") or Google cdr format
                    like "cdr:1,cd_min:MM/DD/YYYY,cd_max:MM/DD/YYYY".
 
     Returns:
@@ -191,12 +191,12 @@ def main():
         sys.exit(0)
 
     print("=" * 60)
-    print("Dutch News Learner — Fetch Related Articles")
+    print("Dutch News Learner - Fetch Related Articles")
     print("=" * 60)
     mode = "incremental (missing articles only)" if not args.all else "all episodes with topics"
     print(f"Episodes: {len(episodes)} ({mode})")
     if args.dry_run:
-        print("(Dry run — no changes)")
+        print("(Dry run - no changes)")
     print()
 
     total_articles = 0

@@ -139,7 +139,7 @@ def export_vocabulary(
     episode_watch: str = Query(
         "any",
         description=(
-            "any | watched_only | unwatched_only — filter by episodes you marked watched "
+            "any | watched_only | unwatched_only - filter by episodes you marked watched "
             "(same user_id as vocab; explicit toggle, not auto-playback)."
         ),
     ),

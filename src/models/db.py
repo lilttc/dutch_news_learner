@@ -36,7 +36,7 @@ def _is_benign_schema_migration_error(exc: BaseException) -> bool:
     """True when DDL failed only because this step was already applied (idempotent re-run).
 
     We still log unexpected errors and re-raise: those indicate bad SQL, connectivity,
-    permissions, or a migration that needs a human fix — never swallow those.
+    permissions, or a migration that needs a human fix - never swallow those.
     """
     orig = getattr(exc, "orig", None)
 
@@ -136,7 +136,7 @@ class SubtitleSegment(Base):
 
 class VocabularyItem(Base):
     """
-    Master vocabulary list — one row per unique lemma across all episodes.
+    Master vocabulary list - one row per unique lemma across all episodes.
 
     Stores the canonical form (lemma) and optional enrichment (translation, difficulty).
     Translation can be added later via dictionary integration or API.
@@ -148,7 +148,7 @@ class VocabularyItem(Base):
     lemma = Column(String(100), unique=True, nullable=False, index=True)
     pos = Column(String(20), index=True)  # NOUN, VERB, ADJ, ADV from spaCy
 
-    # Enrichment (optional — can be populated later via dictionary/API)
+    # Enrichment (optional - can be populated later via dictionary/API)
     translation = Column(Text)  # English translation
     frequency_rank = Column(Integer)  # From Subtlex-NL or similar (lower = more common)
     cefr_level = Column(String(10))  # A1, A2, B1, B2, C1, C2
@@ -175,7 +175,7 @@ class VocabularyItem(Base):
 
 class User(Base):
     """
-    Registered user (Phase 6F — email auth).
+    Registered user (Phase 6F - email auth).
 
     id >= 1_000_000 to avoid collision with AnonymousSession (id 2+) and
     legacy (user_id=1). UserVocabulary.user_id can be: 1=legacy,
@@ -367,7 +367,7 @@ def get_session(engine=None):
 
 
 def init_db(db_url: str | None = None):
-    """Initialize database — create tables and run migrations."""
+    """Initialize database - create tables and run migrations."""
     url = _resolve_url(db_url)
 
     if not _is_postgres(url):

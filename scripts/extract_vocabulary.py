@@ -161,7 +161,7 @@ def run_extraction(
         return
 
     print("=" * 70)
-    print("Dutch News Learner — Vocabulary Extraction")
+    print("Dutch News Learner - Vocabulary Extraction")
     print("=" * 70)
     mode = "incremental (missing vocabulary only)" if incremental else "all episodes"
     print(f"Episodes to process: {len(episodes)} ({mode})")
@@ -169,9 +169,9 @@ def run_extraction(
     # Load dictionary for separable verb recombination
     lookup = get_lookup()
     if lookup.is_loaded:
-        print("Dictionary loaded — separable verb recombination enabled")
+        print("Dictionary loaded - separable verb recombination enabled")
     else:
-        print("Dictionary not found — separable verb recombination disabled")
+        print("Dictionary not found - separable verb recombination disabled")
         lookup = None
     print()
 

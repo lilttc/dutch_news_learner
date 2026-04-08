@@ -4,7 +4,7 @@ Enrich vocabulary items that have no translation using LLM (GPT-4o-mini).
 
 Fills VocabularyItem.translation for words where the dictionary has no entry.
 Uses each word's POS tag and an example sentence from the episode for context.
-Only fills gaps — never overwrites existing dictionary-provided translations.
+Only fills gaps - never overwrites existing dictionary-provided translations.
 
 Requires: OPENAI_API_KEY in .env
 
@@ -65,7 +65,7 @@ Rules:
 - For adjectives/adverbs: give the English equivalent (e.g. "expensive")
 - If a word has multiple meanings, pick the one that fits the example sentence
 - Output ONLY a JSON array of strings, one definition per word, same order
-- No numbering, no explanations, no markdown — just the JSON array
+- No numbering, no explanations, no markdown - just the JSON array
 
 Words:
 {word_block}
@@ -200,14 +200,14 @@ def main():
     ).count()
 
     print("=" * 60)
-    print("Dutch News Learner — LLM Vocabulary Enrichment")
+    print("Dutch News Learner - LLM Vocabulary Enrichment")
     print("=" * 60)
     print(f"Total vocabulary items: {total_in_db}")
     print(f"Missing translations:  {total_missing}")
     print(f"Processing this run:   {len(missing)}")
     print(f"Model: {MODEL} | Batch size: {BATCH_SIZE}")
     if args.dry_run:
-        print("(Dry run — no changes will be saved)")
+        print("(Dry run - no changes will be saved)")
     print()
 
     client = OpenAI(api_key=api_key)
@@ -222,7 +222,7 @@ def main():
 
         if args.dry_run:
             for w in batch:
-                ex = f' — "{w["example"][:50]}..."' if w["example"] else ""
+                ex = f' - "{w["example"][:50]}..."' if w["example"] else ""
                 print(f"    {w['lemma']} ({w['pos']}){ex}")
             enriched += len(batch)
             continue
@@ -255,7 +255,7 @@ def main():
     print(f"Enriched:        {enriched}")
     print(f"Failed:          {failed}")
     if args.dry_run:
-        print("(Dry run — no changes saved)")
+        print("(Dry run - no changes saved)")
     else:
         print("Restart the app to see updated definitions.")
 

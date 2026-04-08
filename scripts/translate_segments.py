@@ -187,13 +187,13 @@ def main():
         sys.exit(0)
 
     print("=" * 60)
-    print("Dutch News Learner — Translate Segments")
+    print("Dutch News Learner - Translate Segments")
     print("=" * 60)
     mode = "incremental (untranslated segments only)" if not args.all else "all episodes"
     print(f"Episodes: {len(episodes)} ({mode})")
     print(f"Model: {MODEL} | Batch size: {BATCH_SIZE}")
     if args.dry_run:
-        print("(Dry run — no changes)")
+        print("(Dry run - no changes)")
     print()
 
     client = OpenAI(api_key=api_key)

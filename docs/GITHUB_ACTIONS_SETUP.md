@@ -1,4 +1,4 @@
-# GitHub Actions — Daily Pipeline Setup
+# GitHub Actions - Daily Pipeline Setup
 
 Steps to set up automated daily pipeline runs via GitHub Actions.
 
@@ -62,7 +62,7 @@ The workflow runs every 10 min from 15:00–20:00 UTC (6pm–8pm Amsterdam). Whe
 - If any playlist video is missing or not fully ingested → run pipeline.
 - If all are present → skip pipeline.
 
-No time window or date filter — the check runs whenever the workflow runs. Manual trigger supports a "Force run" option to bypass the check.
+No time window or date filter - the check runs whenever the workflow runs. Manual trigger supports a "Force run" option to bypass the check.
 
 ---
 

@@ -1,5 +1,5 @@
 """
-Dutch News Learner — Streamlit learning interface.
+Dutch News Learner - Streamlit learning interface.
 
 Episode viewer with embedded video, subtitle transcript, and vocabulary list.
 Click words in the transcript to jump to their definition.
@@ -87,7 +87,7 @@ def _streamlit_build_export_rows(
     elif episode_watch != "any":
         st.warning(
             "Your **src/vocab_export.py** is missing `episode_watch` on `build_export_rows`. "
-            "Episode watch filter ignored — pull the latest repo."
+            "Episode watch filter ignored - pull the latest repo."
         )
 
     if not kwargs:
@@ -193,7 +193,7 @@ def load_user_vocab_for_ids(session, user_id, vocabulary_ids):
     Load UserVocabulary rows for the given ids.
 
     Returns:
-        dict[vocabulary_id, (status, user_sentence)] — only ids that have a row.
+        dict[vocabulary_id, (status, user_sentence)] - only ids that have a row.
     """
     if not vocabulary_ids:
         return {}
@@ -763,7 +763,7 @@ def _cached_dict_lookup(lemma: str, pos: str | None):
 def _get_episode_vocab_data(episode_id: int):
     """
     Load episode vocabulary as serializable dicts. Cached so status changes
-    skip the heavy Postgres episode load — we only reload statuses.
+    skip the heavy Postgres episode load - we only reload statuses.
     """
     session = get_db_session()
     try:
@@ -865,7 +865,7 @@ def _render_vocabulary_fragment(episode_id):
             current_status = uv_row[0] if uv_row else "new"
             saved_note = (uv_row[1] if uv_row else None) or ""
             status_icon = STATUS_ICONS.get(current_status, "")
-            label = f"{status_icon} **{v['lemma']}** ({v['pos']}) — {count}×" if status_icon else f"**{v['lemma']}** ({v['pos']}) — {count}×"
+            label = f"{status_icon} **{v['lemma']}** ({v['pos']}) - {count}×" if status_icon else f"**{v['lemma']}** ({v['pos']}) - {count}×"
             auto_expand = is_searching and total <= 3
 
             with st.expander(label, expanded=auto_expand, key=f"vocab_exp_{episode_id}_{vid}"):
@@ -918,7 +918,7 @@ def _render_vocabulary_fragment(episode_id):
                 if note_key not in st.session_state:
                     st.session_state[note_key] = saved_note
                 st.caption(
-                    "Try writing your own sentence or notes about this word — "
+                    "Try writing your own sentence or notes about this word - "
                     "saved for review and for export later."
                 )
                 st.text_area(
@@ -997,7 +997,7 @@ def render_vocabulary(episode_vocab_list, session=None, statuses=None,
         count = ev.occurrence_count if ev.occurrence_count is not None else 0
         current_status = statuses.get(v.id, "new")
         status_icon = STATUS_ICONS.get(current_status, "")
-        label = f"{status_icon} **{v.lemma}** ({v.pos}) — {count}×" if status_icon else f"**{v.lemma}** ({v.pos}) — {count}×"
+        label = f"{status_icon} **{v.lemma}** ({v.pos}) - {count}×" if status_icon else f"**{v.lemma}** ({v.pos}) - {count}×"
 
         with st.expander(label):
             dict_entry = lookup.lookup_with_example(v.lemma, v.pos)
@@ -1152,7 +1152,7 @@ def _render_tab_related_reading(episode):
     if articles:
         st.caption(
             "NOS articles related to this episode's topics"
-            + (" — from ±7 days around episode date" if episode.published_at else "")
+            + (" - from ±7 days around episode date" if episode.published_at else "")
         )
         # Group articles by topic
         by_topic: dict[str, list] = {}
@@ -1178,7 +1178,7 @@ def _render_tab_related_reading(episode):
         # Fallback: Google search links (when articles haven't been fetched yet)
         st.caption(
             "Read more about these topics on NOS (Dutch news)"
-            + (" — filtered to ±2 days around episode date" if episode.published_at else "")
+            + (" - filtered to ±2 days around episode date" if episode.published_at else "")
         )
         date_range_params = ""
         pub = episode.published_at
@@ -1230,7 +1230,7 @@ display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;line-height:1.35;">
 <span style="font-size:0.92rem;color:#333;">
 <span style="font-size:1.05rem;">🐻‍❄️</span>
 <strong>Enjoying the app?</strong>
-<span style="color:#555;">A coffee or membership helps keep it running — thank you! ✨</span>
+<span style="color:#555;">A coffee or membership helps keep it running - thank you! ✨</span>
 </span>
 <span style="display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;">
 <a href="{BUY_ME_A_COFFEE_URL}" target="_blank" rel="noopener noreferrer"
@@ -1371,7 +1371,7 @@ def _render_my_vocabulary_page(session, user_id: int) -> None:
         for row in display_rows[:10]
     ]
     st.dataframe(preview_ui, width="stretch")
-    st.caption(f"**{len(rows)}** row(s) match — downloads include all of them.")
+    st.caption(f"**{len(rows)}** row(s) match - downloads include all of them.")
 
     csv_body = _streamlit_export_rows_to_csv(
         selected_cols,
@@ -1590,7 +1590,7 @@ def _render_main_nav_and_content() -> None:
     query_episode = st.query_params.get("episode")
 
     episode_options = {
-        f"{pub.strftime('%Y-%m-%d') if pub else '?'} — {(title or '')[:45]}": eid
+        f"{pub.strftime('%Y-%m-%d') if pub else '?'} - {(title or '')[:45]}": eid
         for eid, title, pub in display_rows
     }
     option_keys = list(episode_options.keys())

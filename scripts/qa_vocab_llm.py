@@ -60,7 +60,7 @@ EVAL_LOG = Path(__file__).resolve().parent.parent / "logs" / "qa_vocab_eval.json
 def _log_eval(word: dict, qa_pos: str | None, qa_translation: str | None, qa_note: str | None) -> None:
     """Append one JSONL line per reviewed word to logs/qa_vocab_eval.jsonl.
 
-    Every word gets a line — corrections and clean passes alike — so you can
+    Every word gets a line - corrections and clean passes alike - so you can
     measure correction rate and audit model decisions over time.
     """
     record = {
@@ -83,7 +83,7 @@ def _build_prompt(words: list[dict]) -> str:
     for i, w in enumerate(words, 1):
         translation_str = w["translation"] if w["translation"] else "no translation available"
         lines.append(
-            f'{i}. "{w["lemma"]}" — POS: {w["pos"]}, translation: "{translation_str}"'
+            f'{i}. "{w["lemma"]}" - POS: {w["pos"]}, translation: "{translation_str}"'
         )
         if w.get("example"):
             lines.append(f'   Example: "{w["example"]}"')
@@ -94,24 +94,24 @@ def _build_prompt(words: list[dict]) -> str:
 For each word below:
 1. Check if the existing translation is a correct, natural English dictionary definition for the lemma.
    Only correct it when the existing translation is clearly wrong (e.g. in Dutch, gibberish, or factually incorrect).
-   Output null if the translation is already reasonable — even if you'd phrase it slightly differently.
+   Output null if the translation is already reasonable - even if you'd phrase it slightly differently.
 2. Check if this word is part of a fixed Dutch multi-word expression or idiom (e.g. "ten slotte", "zorgen voor").
    Output null if it is not part of one.
 
 Rules:
-- Translations MUST be in English only — never output Dutch.
+- Translations MUST be in English only - never output Dutch.
 - Translations must be in dictionary base form (infinitive for verbs, singular for nouns).
   Do NOT conjugate or inflect to match the example sentence tense or number.
-  Good: "to provide", "attack", "field" — Bad: "provided", "attacks", "fields"
+  Good: "to provide", "attack", "field" - Bad: "provided", "attacks", "fields"
 - Only correct when the existing translation is clearly wrong. When in doubt, output null.
 - Use the example sentence only to disambiguate meaning, not to change grammatical form.
-- Do NOT correct POS tags — always output null for corrected_pos.
+- Do NOT correct POS tags - always output null for corrected_pos.
 
 Output a JSON array with one object per word, in the same order.
 Schema for each object:
-  "corrected_pos":         null  (always null — do not change POS tags)
-  "corrected_translation": string or null  (only when clearly wrong — English only, dictionary base form)
-  "mwe_note":              string or null  (e.g. "part of 'ten slotte' (finally)" — null if not an MWE)
+  "corrected_pos":         null  (always null - do not change POS tags)
+  "corrected_translation": string or null  (only when clearly wrong - English only, dictionary base form)
+  "mwe_note":              string or null  (e.g. "part of 'ten slotte' (finally)" - null if not an MWE)
 
 Output ONLY the JSON array. No markdown, no explanations.
 
@@ -264,13 +264,13 @@ def main():
     ).count()
 
     print("=" * 60)
-    print("Dutch News Learner — Vocab QA Agent")
+    print("Dutch News Learner - Vocab QA Agent")
     print("=" * 60)
     print(f"Total words not yet QA'd: {total_unchecked}")
     print(f"Processing this run:      {len(words)}")
     print(f"Model: {args.model} | Batch size: {BATCH_SIZE}")
     if args.dry_run:
-        print("(Dry run — no changes will be saved)")
+        print("(Dry run - no changes will be saved)")
     print()
 
     client = OpenAI(api_key=api_key)
@@ -287,7 +287,7 @@ def main():
 
         if args.dry_run:
             for w in batch:
-                ex = f' — "{w["example"][:60]}"' if w["example"] else ""
+                ex = f' - "{w["example"][:60]}"' if w["example"] else ""
                 print(f"    {w['lemma']} ({w['pos']}) = {w['translation']}{ex}")
             checked += len(batch)
             continue
@@ -303,7 +303,7 @@ def main():
             note = result.get("mwe_note")
 
             # Only store when the value genuinely differs from the original.
-            # The model sometimes echoes the original instead of null — ignore those.
+            # The model sometimes echoes the original instead of null - ignore those.
             if new_translation and isinstance(new_translation, str):
                 new_translation = new_translation.strip()
                 if new_translation.lower() != (word["translation"] or "").lower():
@@ -314,7 +314,7 @@ def main():
             if note and isinstance(note, str):
                 vocab_item.qa_note = note.strip()
                 flagged_mwe += 1
-                print(f"    MWE/idiom: {word['lemma']} — {note.strip()}")
+                print(f"    MWE/idiom: {word['lemma']} - {note.strip()}")
 
             vocab_item.qa_checked = True
             checked += 1
@@ -341,7 +341,7 @@ def main():
     print(f"Translation corrections: {corrected_translation}")
     print(f"MWE / idioms flagged:    {flagged_mwe}")
     if args.dry_run:
-        print("(Dry run — no changes saved)")
+        print("(Dry run - no changes saved)")
     else:
         print("Restart the app to see corrected definitions.")
 

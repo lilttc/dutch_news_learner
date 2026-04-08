@@ -4,7 +4,7 @@ Check if the pipeline needs to run: are there playlist videos not yet in the DB?
 
 Compares YouTube playlist videos against DB (episodes with transcript_fetched).
 If any playlist video is missing or not fully ingested → run pipeline.
-No time window or date filter — runs whenever the workflow is triggered.
+No time window or date filter - runs whenever the workflow is triggered.
 
 Used by GitHub Actions. Prints "true" if pipeline should run, "false" to skip.
 """
@@ -28,7 +28,7 @@ def main():
         fetcher = YouTubePlaylistFetcher()
         videos = fetcher.fetch_playlist_videos(DEFAULT_PLAYLIST_ID, max_results=100)
         if not videos:
-            print("true")  # Can't fetch playlist — run pipeline to be safe
+            print("true")  # Can't fetch playlist - run pipeline to be safe
             return
 
         playlist_video_ids = [v["video_id"] for v in videos]

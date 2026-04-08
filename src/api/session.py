@@ -4,7 +4,7 @@ User resolution for per-user vocabulary (Phase 6E + 6F).
 Priority: Bearer token (registered user) > X-Session-Token (anonymous) > legacy (1).
 
 If the client sends a session token (header or query), it must be a valid UUID and
-the DB must succeed — we never silently map those requests onto shared legacy user_id=1.
+the DB must succeed - we never silently map those requests onto shared legacy user_id=1.
 """
 
 import logging

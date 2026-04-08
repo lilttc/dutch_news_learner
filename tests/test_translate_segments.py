@@ -3,7 +3,7 @@ Tests for translate_segments.translate_batch response parsing.
 
 All tests mock the OpenAI client so no API calls are made.
 The parsing logic (numbered vs unnumbered, blank lines, padding) is what
-caused a real production bug — these tests are regression guards.
+caused a real production bug - these tests are regression guards.
 """
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -32,7 +32,7 @@ def test_numbered_response_correct_order() -> None:
 
 
 def test_numbered_response_with_blank_lines_no_shift() -> None:
-    """Blank lines between numbered entries must not shift translations — this was the production bug."""
+    """Blank lines between numbered entries must not shift translations - this was the production bug."""
     client = _make_client("1. Hello\n\n2. The world\n\n3. Good morning")
     result = translate_batch(client, ["Hallo", "De wereld", "Goedemorgen"])
     assert result == ["Hello", "The world", "Good morning"]
@@ -46,7 +46,7 @@ def test_numbered_response_missing_entry_padded_with_empty() -> None:
 
 
 def test_numbered_response_extra_entries_truncated() -> None:
-    """Model returns more items than input — truncate to input length."""
+    """Model returns more items than input - truncate to input length."""
     client = _make_client("1. Hello\n2. The world\n3. Good morning\n4. Extra")
     result = translate_batch(client, ["Hallo", "De wereld", "Goedemorgen"])
     assert len(result) == 3
@@ -64,7 +64,7 @@ def test_unnumbered_response_correct_order() -> None:
 
 
 def test_unnumbered_response_shorter_than_input_padded() -> None:
-    """Fewer translations than inputs — pad with empty strings."""
+    """Fewer translations than inputs - pad with empty strings."""
     client = _make_client("Hello\nThe world")
     result = translate_batch(client, ["Hallo", "De wereld", "Goedemorgen"])
     assert result == ["Hello", "The world", ""]

@@ -45,7 +45,7 @@ def ingest_playlist(
         db_path: Database URL
     """
     print("=" * 70)
-    print(f"Dutch News Learner — Ingesting Playlist")
+    print(f"Dutch News Learner - Ingesting Playlist")
     print(f"Playlist ID: {playlist_id}")
     print(f"Source: {source}")
     if reverse:

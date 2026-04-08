@@ -50,7 +50,7 @@ First lines of transcript:
 Extract exactly 3 descriptive Dutch search phrases for related NOS news article search.
 Each phrase should be 2-5 words that describe the specific topic, not a single vague word.
 Examples: "gaswinning in Groningen", "verbod op fatbikes", "oorlog in Oekraïne", "stijgende energieprijzen", "nieuwe klimaatwet".
-Avoid: single words like "klimaat", "politie", "olie" — be specific enough that a search will find relevant articles.
+Avoid: single words like "klimaat", "politie", "olie" - be specific enough that a search will find relevant articles.
 
 Output exactly 3 phrases, one per line. No numbering, no explanations. Write in Dutch.
 
@@ -155,13 +155,13 @@ def main():
         sys.exit(0)
 
     print("=" * 60)
-    print("Dutch News Learner — Extract Topics")
+    print("Dutch News Learner - Extract Topics")
     print("=" * 60)
     mode = "incremental (missing topics only)" if not args.all else "all episodes"
     print(f"Episodes: {len(episodes)} ({mode})")
     print(f"Model: {MODEL}")
     if args.dry_run:
-        print("(Dry run — no changes)")
+        print("(Dry run - no changes)")
     print()
 
     client = OpenAI(api_key=api_key)

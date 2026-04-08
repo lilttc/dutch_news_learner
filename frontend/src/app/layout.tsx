@@ -7,7 +7,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Dutch News Learner",
   description:
-    "Learn Dutch from daily NOS Journaal episodes — vocabulary, transcripts, quizzes",
+    "Learn Dutch from daily NOS Journaal episodes - vocabulary, transcripts, quizzes",
 };
 
 export default function RootLayout({
@@ -22,7 +22,7 @@ export default function RootLayout({
           <Header />
           <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
           <footer className="border-t border-[var(--border)] py-6 text-center text-xs text-[var(--muted)]">
-            Dutch News Learner — Learn Dutch from NOS Journaal in Makkelijke Taal
+            Dutch News Learner - Learn Dutch from NOS Journaal in Makkelijke Taal
           </footer>
         </Providers>
         <Analytics />

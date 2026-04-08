@@ -13,9 +13,9 @@ GET /api/vocabulary/export?format=csv&template=anki
 Optional filters (same as the default export):
 
 - `status=all` **or** comma-separated subset, e.g. `status=new,learning`
-- `has_note=true|false` — only rows with / without a learner note
-- `episode_from=YYYY-MM-DD` and/or `episode_to=YYYY-MM-DD` — only words that appear in an episode published on those calendar days (UTC). Example: today’s video only → set both to today’s date.
-- `episode_watch=any|watched_only|unwatched_only` — filter by episodes you **marked watched** in the app (explicit toggle; same `user_id` as vocabulary).
+- `has_note=true|false` - only rows with / without a learner note
+- `episode_from=YYYY-MM-DD` and/or `episode_to=YYYY-MM-DD` - only words that appear in an episode published on those calendar days (UTC). Example: today’s video only → set both to today’s date.
+- `episode_watch=any|watched_only|unwatched_only` - filter by episodes you **marked watched** in the app (explicit toggle; same `user_id` as vocabulary).
 
 ## Columns
 

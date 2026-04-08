@@ -28,7 +28,7 @@ def get_secret_key() -> str:
 
     * Production / staging: set ``SECRET_KEY`` (long random string, never commit it).
     * Local API only: you may set ``ALLOW_INSECURE_DEV_JWT=1`` to use a fixed
-      dev-only key — **never** enable that in production (anyone could forge tokens).
+      dev-only key - **never** enable that in production (anyone could forge tokens).
     """
     global _secret_key_cache
     if _secret_key_cache is not None:
@@ -88,7 +88,7 @@ def get_current_user_optional(
 ) -> User | None:
     """
     Return the authenticated User if Bearer token is valid, else None.
-    Does not raise — use get_current_user for protected routes.
+    Does not raise - use get_current_user for protected routes.
     """
     auth = request.headers.get("Authorization")
     if not auth or not auth.startswith("Bearer "):

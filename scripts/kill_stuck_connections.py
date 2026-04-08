@@ -3,7 +3,7 @@
 Terminate stuck Postgres connections (ALTER TABLE, long-running DELETEs, idle transactions).
 
 Use when check_locks.py shows a deadlock of old migrations blocking extraction.
-Safe to run — only kills other backends, not the current connection.
+Safe to run - only kills other backends, not the current connection.
 """
 import os
 import sys

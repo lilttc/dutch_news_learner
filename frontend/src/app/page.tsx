@@ -43,7 +43,7 @@ export default async function HomePage() {
     <div>
       <h1 className="mb-1 text-2xl font-bold">Episodes</h1>
       <p className="mb-6 text-sm text-[var(--muted)]">
-        NOS Journaal in Makkelijke Taal — click an episode to start learning
+        NOS Journaal in Makkelijke Taal - click an episode to start learning
       </p>
 
       {error && (

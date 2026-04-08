@@ -3,7 +3,7 @@
 One-time migration: copy all data from local SQLite to cloud Postgres.
 
 Reads from data/dutch_news.db (SQLite) and writes to DATABASE_URL (Postgres).
-Safe to run multiple times — skips rows that already exist (matched by primary key).
+Safe to run multiple times - skips rows that already exist (matched by primary key).
 
 Uses batch inserts (500 rows/batch) and pre-fetches existing PKs to avoid
 per-row round-trips to the remote database.
@@ -158,7 +158,7 @@ def main():
     print(f"Source: {sqlite_path}")
     print(f"Target: Postgres (Neon)")
     if args.dry_run:
-        print("DRY RUN — no data will be written")
+        print("DRY RUN - no data will be written")
     print()
 
     sqlite_engine = create_engine(SQLITE_URL, echo=False)

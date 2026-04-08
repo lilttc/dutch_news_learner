@@ -88,7 +88,7 @@ POS_HINTS: dict[str, str] = {
     "INTJ": "interjection",
     "NUM": "numeral",
     "PART": "particle",
-    "SPACE": "—",
+    "SPACE": "-",
     "PUNCT": "punctuation",
     "SYM": "symbol",
     "X": "other",

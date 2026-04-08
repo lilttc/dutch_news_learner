@@ -1,4 +1,4 @@
-"""Baseline revision — no DDL (historical schema from _migrate_schema).
+"""Baseline revision - no DDL (historical schema from _migrate_schema).
 
 Existing databases: ``alembic stamp baseline_001`` once so future revisions apply
 in order. Do not ``upgrade`` this on a production DB expecting it to create

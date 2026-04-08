@@ -131,7 +131,7 @@ def show_recurring(session, min_episodes=2, limit=20):
     print(f"\n🔄 RECURRING VOCABULARY (in ≥{min_episodes} episodes)")
     print("-" * 70)
     for lemma, pos, ep_count in recurring:
-        print(f"  {lemma} ({pos}) — in {ep_count} episodes")
+        print(f"  {lemma} ({pos}) - in {ep_count} episodes")
     print()
 
 

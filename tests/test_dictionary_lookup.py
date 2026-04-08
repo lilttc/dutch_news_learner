@@ -1,8 +1,8 @@
 """
-Tests for src/dictionary/lookup.py — DictionaryLookup (SQLite + JSON backends).
+Tests for src/dictionary/lookup.py - DictionaryLookup (SQLite + JSON backends).
 
 Key regression guard: lookup() returns the Dutch gloss, lookup_with_example()
-returns gloss_en (English). These must never be conflated — confusing them was
+returns gloss_en (English). These must never be conflated - confusing them was
 the root cause of Dutch definitions appearing in the English translation field.
 """
 
@@ -77,7 +77,7 @@ def test_sqlite_lookup_prefers_pos_and_falls_back(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def test_lookup_returns_dutch_gloss_not_english(tmp_path: Path) -> None:
-    """lookup() returns the Dutch definition — this is correct for 'Meaning:' in the bubble."""
+    """lookup() returns the Dutch definition - this is correct for 'Meaning:' in the bubble."""
     db_path = _make_sqlite_db(tmp_path, [
         ("houden", "VERB", "niet laten varen, het bezit ervan niet verliezen", "to keep, preserve", None),
     ])
@@ -86,7 +86,7 @@ def test_lookup_returns_dutch_gloss_not_english(tmp_path: Path) -> None:
 
 
 def test_lookup_with_example_returns_english_gloss_en(tmp_path: Path) -> None:
-    """lookup_with_example() gloss_en must be English — used for 'English:' in the bubble."""
+    """lookup_with_example() gloss_en must be English - used for 'English:' in the bubble."""
     db_path = _make_sqlite_db(tmp_path, [
         ("houden", "VERB", "niet laten varen, het bezit ervan niet verliezen", "to keep, preserve", None),
     ])
@@ -95,7 +95,7 @@ def test_lookup_with_example_returns_english_gloss_en(tmp_path: Path) -> None:
     assert result is not None
     assert result["gloss"] == "niet laten varen, het bezit ervan niet verliezen"
     assert result["gloss_en"] == "to keep, preserve"
-    # gloss and gloss_en must be different — if equal, Dutch leaked into English field
+    # gloss and gloss_en must be different - if equal, Dutch leaked into English field
     assert result["gloss"] != result["gloss_en"]
 
 

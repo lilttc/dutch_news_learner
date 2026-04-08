@@ -1,5 +1,5 @@
 """
-Processing module — NLP pipeline for vocabulary extraction.
+Processing module - NLP pipeline for vocabulary extraction.
 
 Extracts lemmas from subtitle text using spaCy, filters by POS,
 and aggregates vocabulary per episode.

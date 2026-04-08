@@ -72,7 +72,7 @@ def extract_entry(entry: dict) -> list[tuple]:
 
     results = []
     for sense in senses:
-        # Skip inflected/form senses — they give wrong meanings (e.g. "olie" = "1st person of oliën")
+        # Skip inflected/form senses - they give wrong meanings (e.g. "olie" = "1st person of oliën")
         if sense.get("form_of") or sense.get("alt_of"):
             continue
 

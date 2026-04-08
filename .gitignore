@@ -14,14 +14,14 @@ build/
 .coverage
 htmlcov/
 
-# Data (raw/intermediate files — too large for git)
+# Data (raw/intermediate files - too large for git)
 data/dictionary/nl-extract.jsonl.gz
 data/dictionary/en-wiktionary-dutch.jsonl
 data/dictionary/dutch_english_fallback.json
 data/dictionary/dutch_glosses.json
 *.sqlite
 
-# Main database now lives in Neon Postgres — no longer tracked in git
+# Main database now lives in Neon Postgres - no longer tracked in git
 data/dutch_news.db
 
 # Keep for deployment (dictionary is read-only, small enough for git):
