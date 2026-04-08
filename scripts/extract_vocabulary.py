@@ -18,7 +18,6 @@ import argparse
 import os
 import sys
 import time
-from datetime import datetime
 from typing import Optional, Tuple
 
 # Add project root to path
@@ -188,11 +187,11 @@ def run_extraction(
         print(f"  Segments loaded: {len(episode.subtitle_segments)}", flush=True)
 
         try:
-            print(f"  Running spaCy + extraction...", flush=True)
+            print("  Running spaCy + extraction...", flush=True)
             items, rows = extract_vocabulary_for_episode(
                 session, episode, extractor, replace_existing=replace_existing
             )
-            print(f"  Committing to database...", flush=True)
+            print("  Committing to database...", flush=True)
             session.commit()
             total_items += items
             total_rows += rows

@@ -117,7 +117,6 @@ def show_translation_status(session):
 
 def show_recurring(session, min_episodes=2, limit=20):
     """Show words that appear in multiple episodes (recurring vocabulary)."""
-    from sqlalchemy import func
 
     recurring = (
         session.query(VocabularyItem.lemma, VocabularyItem.pos, func.count(EpisodeVocabulary.episode_id).label("ep_count"))

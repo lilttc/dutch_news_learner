@@ -227,7 +227,7 @@ def main():
         if input_path.exists():
             print(f"Using cached file: {input_path}")
         else:
-            print(f"Downloading EN Wiktionary Dutch entries (~229MB)...")
+            print("Downloading EN Wiktionary Dutch entries (~229MB)...")
             print(f"  URL: {DOWNLOAD_URL}")
             print("  (This may take a few minutes)")
             urlretrieve(DOWNLOAD_URL, input_path)

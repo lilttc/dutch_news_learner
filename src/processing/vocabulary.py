@@ -12,7 +12,7 @@ the combined lemma (aanvallen) instead of just the base verb (vallen).
 """
 
 from collections import defaultdict
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 KEEP_POS = {"NOUN", "VERB", "ADJ", "ADV"}
 MIN_LEMMA_LENGTH = 2

@@ -156,7 +156,7 @@ def main():
         sys.exit(1)
 
     print(f"Source: {sqlite_path}")
-    print(f"Target: Postgres (Neon)")
+    print("Target: Postgres (Neon)")
     if args.dry_run:
         print("DRY RUN - no data will be written")
     print()

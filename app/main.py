@@ -42,7 +42,6 @@ from src.models import (
     Base,
     Episode,
     EpisodeVocabulary,
-    SubtitleSegment,
     User,
     UserEpisodeWatch,
     UserVocabulary,
@@ -129,7 +128,7 @@ def fix_concatenated_spaces(text: str) -> str:
     text = re.sub(r"\been(?=[a-z]{2,})", r"een ", text, flags=re.IGNORECASE)
     # Insert space before common Dutch function words when concatenated (lowercase letter before)
     for word in ("heeft", "hebben", "is", "zijn", "van", "op", "te", "dat", "die", "voor", "met", "naar", "uit"):
-        text = re.sub(rf"([a-z])({word})\b", rf"\1 \2", text)
+        text = re.sub(rf"([a-z])({word})\b", r"\1 \2", text)
     return text
 
 

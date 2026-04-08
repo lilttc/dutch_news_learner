@@ -9,7 +9,6 @@ create_access_token / decode_token work against that test key.
 """
 
 import os
-from datetime import timedelta
 from unittest.mock import patch
 
 import pytest

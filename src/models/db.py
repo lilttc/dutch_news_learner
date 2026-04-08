@@ -450,7 +450,7 @@ def _migrate_schema(engine):
                 GREATEST(1, (SELECT COALESCE(MAX(id), 1) FROM anonymous_sessions))
             )""",
             # Phase 6F: users table for email auth (id >= 1000000 to avoid collision)
-            f"""CREATE TABLE IF NOT EXISTS users (
+            """CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY,
                 email VARCHAR(255) NOT NULL UNIQUE,
                 password_hash VARCHAR(255) NOT NULL,
