@@ -73,10 +73,10 @@ Users can mark words as: **known** | **learning** | **new**
 
 Four-tier translation pipeline ensures high coverage and quality:
 
-1. **Wiktionary dictionary** (NL + EN editions, stored as SQLite) — covers base forms, free
-2. **LLM gap-fill** (GPT-4o-mini) — fills missing translations for inflected forms and rare words
-3. **LLM QA agent** (GPT-4o) — reviews all translations, corrects errors, flags multi-word expressions
-4. **Manual lookup links** (Mijnwoordenboek, Woorden.org, Wiktionary) — shown in the definition bubble
+1. **Wiktionary dictionary** (NL + EN editions, stored as SQLite) - covers base forms, free
+2. **LLM gap-fill** (GPT-4o-mini) - fills missing translations for inflected forms and rare words
+3. **LLM QA agent** (GPT-4o) - reviews all translations, corrects errors, flags multi-word expressions
+4. **Manual lookup links** (Mijnwoordenboek, Woorden.org, Wiktionary) - shown in the definition bubble
 
 ### Personal Vocabulary Tracker
 
@@ -92,7 +92,7 @@ For each word the system tracks:
 
 Track how often words appear across multiple news episodes:
 
-> **inflatie** — Seen in 6 episodes · Seen 14 times · Last seen: 2026-03-12
+> **inflatie** - Seen in 6 episodes · Seen 14 times · Last seen: 2026-03-12
 
 Recurring vocabulary highlights important real-world words.
 
@@ -264,7 +264,7 @@ cd frontend && npm run dev
 pytest tests
 ```
 
-**Source:** NOS Journaal in Makkelijke Taal channel uploads — Dutch news in easy language.
+**Source:** NOS Journaal in Makkelijke Taal channel uploads - Dutch news in easy language.
 
 ---
 
@@ -280,7 +280,7 @@ pytest tests
 | **5A** | Vocabulary quality (LLM enrichment, separable verb detection, QA agent) | ✅ Done |
 | **5B** | Video-transcript UX (in-page timestamp seeking) | ✅ Done |
 | **6A** | PostgreSQL (Neon) + cloud migration | ✅ Done |
-| **6B** | Daily pipeline (WSL cron — GitHub Actions blocked by YouTube IP restrictions) | ✅ Done |
+| **6B** | Daily pipeline (WSL cron - GitHub Actions blocked by YouTube IP restrictions) | ✅ Done |
 | **6C** | User auth + proper hosting | Planned |
 | **Next** | Shadowing mode (auto-pause per sentence for speaking practice) | Up next |
 | **Next** | Semantic episode search (pgvector) | Up next |

@@ -12,7 +12,7 @@ the combined lemma (aanvallen) instead of just the base verb (vallen).
 """
 
 from collections import defaultdict
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 KEEP_POS = {"NOUN", "VERB", "ADJ", "ADV"}
 MIN_LEMMA_LENGTH = 2
@@ -98,7 +98,7 @@ class SeparableVerbRecombiner:
         # Only fires when the particle is the LAST content token (before
         # punctuation) to avoid false positives like "loopt op straat".
         # Tokens that spaCy already identified as prepositional (dep=case/obl)
-        # are excluded — those are true prepositions, not verb particles.
+        # are excluded - those are true prepositions, not verb particles.
         _PREP_DEP_LABELS = {"case", "obl", "nmod", "advmod"}
         for sent in doc.sents:
             tokens = list(sent)

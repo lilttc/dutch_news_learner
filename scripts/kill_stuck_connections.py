@@ -3,12 +3,13 @@
 Terminate stuck Postgres connections (ALTER TABLE, long-running DELETEs, idle transactions).
 
 Use when check_locks.py shows a deadlock of old migrations blocking extraction.
-Safe to run — only kills other backends, not the current connection.
+Safe to run - only kills other backends, not the current connection.
 """
 import os
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from dotenv import load_dotenv; load_dotenv()
+from dotenv import load_dotenv
+load_dotenv()
 from src.models import get_engine
 from sqlalchemy import text
 
@@ -40,7 +41,7 @@ with engine.connect() as conn:
         try:
             conn.execute(text("SELECT pg_terminate_backend(:pid)"), {"pid": r[0]})
             conn.commit()
-            print(f"    -> terminated")
+            print("    -> terminated")
         except Exception as e:
             print(f"    -> failed: {e}")
 

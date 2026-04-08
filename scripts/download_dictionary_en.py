@@ -2,7 +2,7 @@
 """
 Download English glosses for Dutch words from the English Wiktionary (via kaikki.org).
 
-The English Wiktionary defines Dutch words with English glosses — exactly what learners
+The English Wiktionary defines Dutch words with English glosses - exactly what learners
 need. This script downloads the pre-extracted JSONL, filters for content words
 (noun, verb, adj, adv), and merges English glosses into the existing dutch_glosses.json.
 
@@ -157,7 +157,7 @@ def merge_into_glosses(existing: dict, en_data: dict) -> tuple[int, int]:
     2. Add entirely new entries that only exist in the EN Wiktionary.
 
     Returns:
-        (enriched_count, new_count) — how many existing entries got gloss_en filled,
+        (enriched_count, new_count) - how many existing entries got gloss_en filled,
         and how many new lemma/pos entries were added.
     """
     enriched = 0
@@ -177,7 +177,7 @@ def merge_into_glosses(existing: dict, en_data: dict) -> tuple[int, int]:
                             pdata["example"] = example
                         enriched += 1
                 else:
-                    # POS exists in EN but not NL — add it
+                    # POS exists in EN but not NL - add it
                     existing[lemma][pos] = {
                         "gloss": "",
                         "gloss_en": gloss_en,
@@ -185,7 +185,7 @@ def merge_into_glosses(existing: dict, en_data: dict) -> tuple[int, int]:
                     }
                     new_entries += 1
             else:
-                # Lemma not in NL Wiktionary at all — create new entry
+                # Lemma not in NL Wiktionary at all - create new entry
                 if lemma not in existing:
                     existing[lemma] = {}
                 existing[lemma][pos] = {
@@ -227,7 +227,7 @@ def main():
         if input_path.exists():
             print(f"Using cached file: {input_path}")
         else:
-            print(f"Downloading EN Wiktionary Dutch entries (~229MB)...")
+            print("Downloading EN Wiktionary Dutch entries (~229MB)...")
             print(f"  URL: {DOWNLOAD_URL}")
             print("  (This may take a few minutes)")
             urlretrieve(DOWNLOAD_URL, input_path)
@@ -253,7 +253,7 @@ def main():
         )
         print(f"  {len(existing)} lemmas, {existing_en_count} already have gloss_en")
     else:
-        print(f"No existing dictionary at {args.output} — creating from scratch.")
+        print(f"No existing dictionary at {args.output} - creating from scratch.")
     print()
 
     # Step 4: Merge
@@ -273,7 +273,7 @@ def main():
 
     # Step 5: Save
     if args.dry_run:
-        print("(Dry run — no changes saved)")
+        print("(Dry run - no changes saved)")
     else:
         with open(args.output, "w", encoding="utf-8") as f:
             json.dump(existing, f, ensure_ascii=False, indent=0)

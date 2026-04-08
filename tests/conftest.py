@@ -13,7 +13,7 @@ import tempfile
 import pytest
 from fastapi.testclient import TestClient
 
-# Temporary SQLite file (not :memory: — engine pool needs a shared file path).
+# Temporary SQLite file (not :memory: - engine pool needs a shared file path).
 _tmp_db = tempfile.NamedTemporaryFile(suffix=".pytest-dnl.db", delete=False)
 _tmp_db.close()
 os.environ["DATABASE_URL"] = f"sqlite:///{_tmp_db.name}"

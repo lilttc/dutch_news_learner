@@ -1,4 +1,4 @@
-"""FastAPI smoke tests — isolated SQLite, no external services."""
+"""FastAPI smoke tests - isolated SQLite, no external services."""
 
 from __future__ import annotations
 

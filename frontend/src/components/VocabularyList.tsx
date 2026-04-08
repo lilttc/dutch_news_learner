@@ -140,7 +140,7 @@ export function VocabularyList({ vocabulary }: { vocabulary: VocabWord[] }) {
                   {statusIcon}
                   <strong>{v.lemma}</strong>{" "}
                   <span className="text-[var(--muted)]">
-                    ({v.pos}) — {v.occurrence_count}×
+                    ({v.pos}) - {v.occurrence_count}×
                   </span>
                 </span>
                 <span className="text-[var(--muted)]">{isOpen ? "▲" : "▼"}</span>

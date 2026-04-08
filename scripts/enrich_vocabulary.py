@@ -28,6 +28,27 @@ from src.dictionary import get_lookup
 from src.models import VocabularyItem, get_engine, get_session
 
 
+def enrich_items(items, lookup, dry_run=False):
+    """
+    Core enrichment loop - sets item.translation to the English gloss_en for each item.
+
+    Returns (updated, not_found). Separated from main() for testability.
+    """
+    updated = 0
+    not_found = 0
+    for item in items:
+        entry = lookup.lookup_with_example(item.lemma, item.pos)
+        # Use English gloss (gloss_en), not the Dutch definition (gloss)
+        gloss_en = entry.get("gloss_en") if entry else None
+        if gloss_en:
+            if not dry_run:
+                item.translation = gloss_en
+            updated += 1
+        else:
+            not_found += 1
+    return updated, not_found
+
+
 def main():
     parser = argparse.ArgumentParser(description="Enrich vocabulary with dictionary translations")
     parser.add_argument("--all", action="store_true", help="Overwrite all items, not just those missing a translation")
@@ -50,19 +71,7 @@ def main():
         )
     items = query.all()
 
-    updated = 0
-    not_found = 0
-
-    for item in items:
-        entry = lookup.lookup_with_example(item.lemma, item.pos)
-        # Use English gloss (gloss_en), not the Dutch definition (gloss)
-        gloss_en = entry.get("gloss_en") if entry else None
-        if gloss_en:
-            if not args.dry_run:
-                item.translation = gloss_en
-            updated += 1
-        else:
-            not_found += 1
+    updated, not_found = enrich_items(items, lookup, dry_run=args.dry_run)
 
     if not args.dry_run:
         session.commit()
@@ -72,7 +81,7 @@ def main():
     print(f"Updated with translation: {updated}")
     print(f"Not in dictionary: {not_found}")
     if args.dry_run:
-        print("(Dry run — no changes saved)")
+        print("(Dry run - no changes saved)")
 
 
 if __name__ == "__main__":

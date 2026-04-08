@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
     ``init_db()`` always ran ``create_all`` first; the API must do the same so a
     fresh SQLite file (e.g. pytest) does not fail on the first ALTER.
 
-    Long-term, heavy DDL should move to Alembic and run in deploy — this startup
+    Long-term, heavy DDL should move to Alembic and run in deploy - this startup
     path stays for compatibility until that migration exists.
     """
     engine = get_engine()

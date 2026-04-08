@@ -27,4 +27,5 @@ python-jose[cryptography]>=3.3.0
 # API & Frontend (Phase 3)
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
+slowapi>=0.1.9
 streamlit>=1.37.0

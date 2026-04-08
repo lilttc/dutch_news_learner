@@ -1,4 +1,4 @@
-# Dutch News Learner — Architecture
+# Dutch News Learner - Architecture
 
 This document describes the system architecture, data flow, and design decisions for Dutch News Learner.
 
@@ -138,7 +138,7 @@ Candidate vocabulary (lemma + POS + example sentence)
         ▼
 ┌───────────────────────────────┐
 │ Tier 1: Wiktionary Dictionary │  POS-aware lookup (NL + EN editions)
-│ (dutch_glosses.db — SQLite)   │  enrich_vocabulary.py → translation field
+│ (dutch_glosses.db - SQLite)   │  enrich_vocabulary.py → translation field
 │                               │  Covers base forms; free, no API call
 └─────────────┬─────────────────┘
               │ words with no English gloss
@@ -334,11 +334,11 @@ For each vocabulary item in quiz pool:
 
 When displaying vocabulary, rank by:
 
-1. **User status** — `learning` > `new` > `known` (hide `ignored`)
-2. **Recurrence** — Higher episode count = higher priority
-3. **Episode frequency** — More appearances in this episode = more important
-4. **Difficulty** — Filter by CEFR (e.g., show A2–B2 only)
-5. **Quiz performance** — Previously incorrect = higher priority
+1. **User status** - `learning` > `new` > `known` (hide `ignored`)
+2. **Recurrence** - Higher episode count = higher priority
+3. **Episode frequency** - More appearances in this episode = more important
+4. **Difficulty** - Filter by CEFR (e.g., show A2–B2 only)
+5. **Quiz performance** - Previously incorrect = higher priority
 
 ---
 
@@ -384,7 +384,7 @@ src/api/
 
 ```
 app/
-├── main.py             # Entry point — episode viewer, transcript, vocabulary, Related reading
+├── main.py             # Entry point - episode viewer, transcript, vocabulary, Related reading
 └── (single-page MVP)   # Clickable transcript with definition bubbles, translation toggle
 ```
 
@@ -399,7 +399,7 @@ app/
 | **spaCy nl_core_news_md** | Dutch NLP (tokenize, lemmatize, POS, dep parse) | ~50MB model |
 | **Wiktionary NL + EN** | Dictionary (glosses, POS-aware) | Downloaded once, stored as SQLite |
 | **OpenAI API (GPT-4o-mini)** | Segment translation, topic extraction, vocab gap-filling | Optional but recommended |
-| **OpenAI API (GPT-4o)** | Vocabulary QA agent — reviews and corrects translations | Optional, higher quality |
+| **OpenAI API (GPT-4o)** | Vocabulary QA agent - reviews and corrects translations | Optional, higher quality |
 | **DuckDuckGo (ddgs)** | Related NOS article search | No key required, rate-limited with backoff |
 
 ---
@@ -408,21 +408,21 @@ app/
 
 ### 7.1 Current Deployment
 
-- **Auth** — Email-based auth implemented (Streamlit sidebar + FastAPI + Next.js)
-- **PostgreSQL (Neon)** — Cloud database, shared by Streamlit app and pipeline
-- **SQLite fallback** — Local dev when `DATABASE_URL` not set
-- **Dictionary** — Local SQLite file (`dutch_glosses.db`, read-only)
-- **Streamlit Cloud** — Primary deployment; auto-deploys from `main` branch
-- **FastAPI + Next.js** — Secondary/portfolio stack, currently suspended on Render/Vercel
-- **Pipeline** — `run_pipeline.sh` runs via WSL cron on owner's PC (weekdays 18:00 Amsterdam)
+- **Auth** - Email-based auth implemented (Streamlit sidebar + FastAPI + Next.js)
+- **PostgreSQL (Neon)** - Cloud database, shared by Streamlit app and pipeline
+- **SQLite fallback** - Local dev when `DATABASE_URL` not set
+- **Dictionary** - Local SQLite file (`dutch_glosses.db`, read-only)
+- **Streamlit Cloud** - Primary deployment; auto-deploys from `main` branch
+- **FastAPI + Next.js** - Secondary/portfolio stack, currently suspended on Render/Vercel
+- **Pipeline** - `run_pipeline.sh` runs via WSL cron on owner's PC (weekdays 18:00 Amsterdam)
 
 ### 7.2 Public Platform (Future)
 
-- **PostgreSQL** — Already in use (Neon)
-- **Authentication** — Auth0, Supabase, or similar
-- **Background jobs** — Celery, Dramatiq, or cloud scheduler
-- **Hosting** — Render, Railway, or VPS
-- **Docker** — Containerized deployment
+- **PostgreSQL** - Already in use (Neon)
+- **Authentication** - Auth0, Supabase, or similar
+- **Background jobs** - Celery, Dramatiq, or cloud scheduler
+- **Hosting** - Render, Railway, or VPS
+- **Docker** - Containerized deployment
 
 ---
 
@@ -445,10 +445,10 @@ app/
 
 ## 9. Future Architecture Extensions
 
-- **Spaced repetition** — Replace simple queue with SM-2 or similar
-- **Topic clustering** — Group vocabulary by news topic
-- **Shadowing mode** — Auto-pause after each sentence for speaking practice
-- **Semantic search** — pgvector episode search by topic/theme
-- **Listening mode** — Audio-only quiz, pronunciation practice
-- **CEFR placement** — Estimate user level from known words
-- **Mobile** — Investigate empty page bug on Android/Streamlit
+- **Spaced repetition** - Replace simple queue with SM-2 or similar
+- **Topic clustering** - Group vocabulary by news topic
+- **Shadowing mode** - Auto-pause after each sentence for speaking practice
+- **Semantic search** - pgvector episode search by topic/theme
+- **Listening mode** - Audio-only quiz, pronunciation practice
+- **CEFR placement** - Estimate user level from known words
+- **Mobile** - Investigate empty page bug on Android/Streamlit

@@ -18,7 +18,6 @@ import argparse
 import os
 import sys
 import time
-from datetime import datetime
 from typing import Optional, Tuple
 
 # Add project root to path
@@ -161,7 +160,7 @@ def run_extraction(
         return
 
     print("=" * 70)
-    print("Dutch News Learner — Vocabulary Extraction")
+    print("Dutch News Learner - Vocabulary Extraction")
     print("=" * 70)
     mode = "incremental (missing vocabulary only)" if incremental else "all episodes"
     print(f"Episodes to process: {len(episodes)} ({mode})")
@@ -169,9 +168,9 @@ def run_extraction(
     # Load dictionary for separable verb recombination
     lookup = get_lookup()
     if lookup.is_loaded:
-        print("Dictionary loaded — separable verb recombination enabled")
+        print("Dictionary loaded - separable verb recombination enabled")
     else:
-        print("Dictionary not found — separable verb recombination disabled")
+        print("Dictionary not found - separable verb recombination disabled")
         lookup = None
     print()
 
@@ -188,11 +187,11 @@ def run_extraction(
         print(f"  Segments loaded: {len(episode.subtitle_segments)}", flush=True)
 
         try:
-            print(f"  Running spaCy + extraction...", flush=True)
+            print("  Running spaCy + extraction...", flush=True)
             items, rows = extract_vocabulary_for_episode(
                 session, episode, extractor, replace_existing=replace_existing
             )
-            print(f"  Committing to database...", flush=True)
+            print("  Committing to database...", flush=True)
             session.commit()
             total_items += items
             total_rows += rows

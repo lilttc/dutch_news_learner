@@ -45,7 +45,7 @@ export function EpisodeView({ episode }: { episode: EpisodeDetail }) {
         </p>
       )}
 
-      {/* Video embed — enablejsapi=1 allows postMessage seeking */}
+      {/* Video embed - enablejsapi=1 allows postMessage seeking */}
       <div className="relative mb-6 overflow-hidden rounded-lg pb-[56.25%]">
         <iframe
           ref={iframeRef}
