@@ -69,8 +69,14 @@ def convert():
                     )
                 elif isinstance(entry, dict):
                     conn.execute(
-                        "INSERT OR IGNORE INTO glosses (lemma, pos, gloss, gloss_en, example) VALUES (?, ?, ?, ?, ?)",
-                        (key, pos, entry.get("gloss"), entry.get("gloss_en"), entry.get("example")),
+                        "INSERT OR IGNORE INTO glosses (lemma, pos, gloss, gloss_en, example) VALUES (?, ?, ?, ?, ?)",  # noqa: E501
+                        (
+                            key,
+                            pos,
+                            entry.get("gloss"),
+                            entry.get("gloss_en"),
+                            entry.get("example"),
+                        ),
                     )
                 rows += 1
 

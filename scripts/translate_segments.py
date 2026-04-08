@@ -32,7 +32,13 @@ load_dotenv()
 from openai import OpenAI
 from sqlalchemy import or_
 
-from src.models import Episode, SubtitleSegment, _migrate_schema, get_engine, get_session
+from src.models import (
+    Episode,
+    SubtitleSegment,
+    _migrate_schema,
+    get_engine,
+    get_session,
+)
 
 # Batch size for API calls (balance cost vs latency)
 BATCH_SIZE = 12
@@ -46,8 +52,8 @@ def translate_batch(client: OpenAI, texts: list[str]) -> list[str]:
     Translate a batch of Dutch texts to English.
     Returns one translation per input, same order.
     """
-    numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(texts))
-    prompt = f"""Translate these Dutch sentences to English. They are from NOS news in easy language.
+    numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(texts))
+    prompt = f"""Translate these Dutch sentences to English. They are from NOS news in easy language.  # noqa: E501
 Output exactly one English translation per line, in the same order. No numbering, no explanations.
 Preserve the tone (news, factual). Keep proper nouns (names, places) as-is.
 
@@ -59,7 +65,10 @@ English translations (one per line):"""
     response = client.chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": "You are a translator. Output only the translations, one per line."},
+            {
+                "role": "system",
+                "content": "You are a translator. Output only the translations, one per line.",
+            },
             {"role": "user", "content": prompt},
         ],
         temperature=0.2,
@@ -135,13 +144,27 @@ def translate_segments_for_episode(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Translate subtitle segments to English via OpenAI")
-    parser.add_argument("--all", action="store_true", help="Process all episodes (re-process even fully translated)")
-    parser.add_argument("--force", action="store_true", help="Re-translate segments that already have a translation (use after fixing pipeline bugs)")
+    parser = argparse.ArgumentParser(
+        description="Translate subtitle segments to English via OpenAI"
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Process all episodes (re-process even fully translated)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-translate segments that already have a translation (use after fixing pipeline bugs)",  # noqa: E501
+    )
     parser.add_argument("--max", type=int, metavar="N", help="Process only N most recent episodes")
     parser.add_argument("--episode-id", type=int, metavar="ID", help="Process only this episode")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be translated")
-    parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var, then SQLite fallback)")
+    parser.add_argument(
+        "--db",
+        default=None,
+        help="Database URL (default: DATABASE_URL env var, then SQLite fallback)",
+    )
     args = parser.parse_args()
 
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -183,7 +206,11 @@ def main():
         episodes = query.all()
 
     if not episodes:
-        print("No episodes need translation." if not args.all else "No episodes with transcripts found.")
+        print(
+            "No episodes need translation."
+            if not args.all
+            else "No episodes with transcripts found."
+        )
         sys.exit(0)
 
     print("=" * 60)
@@ -201,7 +228,9 @@ def main():
 
     for ep in episodes:
         print(f"[{ep.id}] {ep.title[:50]}...")
-        trans, skip = translate_segments_for_episode(session, ep, client, dry_run=args.dry_run, force=args.force)
+        trans, skip = translate_segments_for_episode(
+            session, ep, client, dry_run=args.dry_run, force=args.force
+        )
         total_translated += trans
         if trans or skip:
             print(f"  Translated: {trans} | Already had: {skip}")

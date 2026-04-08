@@ -81,9 +81,7 @@ def ingest_playlist(
         video_ids = [v["video_id"] for v in videos]
         existing_ids = {
             r[0]
-            for r in session.query(Episode.video_id)
-            .filter(Episode.video_id.in_(video_ids))
-            .all()
+            for r in session.query(Episode.video_id).filter(Episode.video_id.in_(video_ids)).all()
         }
         videos_to_process = [v for v in videos if v["video_id"] not in existing_ids]
         skipped_count = len(videos) - len(videos_to_process)
@@ -107,9 +105,7 @@ def ingest_playlist(
         existing = session.query(Episode).filter_by(video_id=video_id).first()
 
         try:
-            transcript_result = transcript_fetcher.fetch_transcript(
-                video_id, include_metadata=True
-            )
+            transcript_result = transcript_fetcher.fetch_transcript(video_id, include_metadata=True)
 
             if not transcript_result:
                 print("  ❌ FAILED: No transcript available")
@@ -123,9 +119,7 @@ def ingest_playlist(
             print(f"  ✅ Transcript: {len(segments)} segments ({metadata['language_code']})")
 
             # Create or update episode
-            published_at = datetime.fromisoformat(
-                video_data["published_at"].replace("Z", "+00:00")
-            )
+            published_at = datetime.fromisoformat(video_data["published_at"].replace("Z", "+00:00"))
 
             if existing:
                 episode = existing
@@ -194,9 +188,7 @@ def ingest_playlist(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Ingest YouTube playlist for Dutch News Learner"
-    )
+    parser = argparse.ArgumentParser(description="Ingest YouTube playlist for Dutch News Learner")
     parser.add_argument(
         "--playlist-id",
         default=DEFAULT_PLAYLIST_ID,

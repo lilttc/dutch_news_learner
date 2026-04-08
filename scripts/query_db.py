@@ -13,6 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from sqlalchemy import func, or_
@@ -29,12 +30,7 @@ from src.models import (
 
 def show_episodes(session, limit=10):
     """List episodes with subtitle and vocabulary counts."""
-    episodes = (
-        session.query(Episode)
-        .order_by(Episode.published_at.desc())
-        .limit(limit)
-        .all()
-    )
+    episodes = session.query(Episode).order_by(Episode.published_at.desc()).limit(limit).all()
     print("\n📺 EPISODES")
     print("-" * 70)
     for ep in episodes:
@@ -51,20 +47,14 @@ def show_vocabulary(session, limit=20, episode_id=None):
     """List vocabulary items, optionally filtered by episode."""
     query = session.query(VocabularyItem).order_by(VocabularyItem.lemma)
     if episode_id:
-        subq = (
-            session.query(EpisodeVocabulary.vocabulary_id)
-            .filter_by(episode_id=episode_id)
-        )
+        subq = session.query(EpisodeVocabulary.vocabulary_id).filter_by(episode_id=episode_id)
         query = query.filter(VocabularyItem.id.in_(subq))
     items = query.limit(limit).all()
     print(f"\n📚 VOCABULARY (top {limit})" + (f" for episode {episode_id}" if episode_id else ""))
     print("-" * 70)
     for v in items:
         ep_count = session.query(EpisodeVocabulary).filter_by(vocabulary_id=v.id).count()
-        total = (
-            session.query(EpisodeVocabulary.occurrence_count)
-            .filter_by(vocabulary_id=v.id)
-        )
+        total = session.query(EpisodeVocabulary.occurrence_count).filter_by(vocabulary_id=v.id)
         total_count = sum(r[0] for r in total)
         trans = f" → {v.translation}" if v.translation else ""
         print(f"  {v.lemma} ({v.pos}){trans}")
@@ -119,7 +109,11 @@ def show_recurring(session, min_episodes=2, limit=20):
     """Show words that appear in multiple episodes (recurring vocabulary)."""
 
     recurring = (
-        session.query(VocabularyItem.lemma, VocabularyItem.pos, func.count(EpisodeVocabulary.episode_id).label("ep_count"))
+        session.query(
+            VocabularyItem.lemma,
+            VocabularyItem.pos,
+            func.count(EpisodeVocabulary.episode_id).label("ep_count"),
+        )
         .join(EpisodeVocabulary)
         .group_by(VocabularyItem.id)
         .having(func.count(EpisodeVocabulary.episode_id) >= min_episodes)
@@ -139,10 +133,18 @@ def main():
     parser.add_argument("--episodes", action="store_true", help="List episodes")
     parser.add_argument("--vocab", action="store_true", help="List vocabulary")
     parser.add_argument("--recurring", action="store_true", help="Show recurring words")
-    parser.add_argument("--translation-status", action="store_true", help="Show translation status (episodes/segments needing translation)")
+    parser.add_argument(
+        "--translation-status",
+        action="store_true",
+        help="Show translation status (episodes/segments needing translation)",
+    )
     parser.add_argument("--episode-id", type=int, help="Filter vocabulary by episode ID")
     parser.add_argument("--top", type=int, default=20, help="Limit rows (default: 20)")
-    parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var, then SQLite fallback)")
+    parser.add_argument(
+        "--db",
+        default=None,
+        help="Database URL (default: DATABASE_URL env var, then SQLite fallback)",
+    )
 
     args = parser.parse_args()
 

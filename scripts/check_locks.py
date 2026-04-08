@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Quick check of active connections and locks on Neon."""
+
 import os
 import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from dotenv import load_dotenv
+
 load_dotenv()
 from src.models import get_engine
 from sqlalchemy import text
@@ -11,14 +14,16 @@ from sqlalchemy import text
 engine = get_engine()
 with engine.connect() as conn:
     print("=== Active connections ===")
-    rows = conn.execute(text("""
+    rows = conn.execute(
+        text("""
         SELECT pid, state, wait_event_type, wait_event,
                left(query, 150) as query,
                now() - query_start as duration
         FROM pg_stat_activity
         WHERE datname = current_database()
         ORDER BY query_start
-    """)).fetchall()
+    """)
+    ).fetchall()
     if not rows:
         print("(none)")
     for r in rows:
@@ -27,7 +32,8 @@ with engine.connect() as conn:
         print()
 
     print("=== Blocked queries ===")
-    blocked = conn.execute(text("""
+    blocked = conn.execute(
+        text("""
         SELECT blocked.pid AS blocked_pid,
                blocked.query AS blocked_query,
                blocking.pid AS blocking_pid,
@@ -39,7 +45,8 @@ with engine.connect() as conn:
             AND blocked_locks.pid != blocking_locks.pid
         JOIN pg_stat_activity blocking ON blocking_locks.pid = blocking.pid
         WHERE NOT blocked_locks.granted
-    """)).fetchall()
+    """)
+    ).fetchall()
     if not blocked:
         print("(none)")
     for r in blocked:

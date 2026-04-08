@@ -68,10 +68,7 @@ def get_user_id(
         return user.id
 
     # 2. Fall back to anonymous session (X-Session-Token)
-    token = (
-        request.headers.get("X-Session-Token")
-        or request.query_params.get("token")
-    )
+    token = request.headers.get("X-Session-Token") or request.query_params.get("token")
     if not token or not token.strip():
         return LEGACY_USER_ID
 

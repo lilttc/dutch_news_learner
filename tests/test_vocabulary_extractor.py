@@ -22,6 +22,7 @@ from src.processing.vocabulary import (
 # Fake spaCy objects (no real model needed)
 # ---------------------------------------------------------------------------
 
+
 class FakeToken:
     def __init__(
         self,
@@ -84,6 +85,7 @@ class FakeDoc(list):
 def make_fake_nlp(tokens: List[FakeToken]) -> Callable[[str], FakeDoc]:
     def fake_nlp(text: str) -> FakeDoc:
         return FakeDoc(tokens, text=text)
+
     return fake_nlp
 
 
@@ -100,8 +102,16 @@ class StubDictionary:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _noun(i, text, lemma=None, is_stop=False):
-    return FakeToken(i=i, text=text, lemma=lemma or text.lower(), pos="NOUN", dep="obj", is_stop=is_stop)
+    return FakeToken(
+        i=i,
+        text=text,
+        lemma=lemma or text.lower(),
+        pos="NOUN",
+        dep="obj",
+        is_stop=is_stop,
+    )
 
 
 def _verb(i, text, lemma=None):
@@ -115,6 +125,7 @@ def _extractor(tokens, dictionary_lookup=None):
 # ---------------------------------------------------------------------------
 # Separable verb recombination (existing test preserved + extended)
 # ---------------------------------------------------------------------------
+
 
 def test_vocabulary_extractor_recombines_separable_verb() -> None:
     tokens = [
@@ -173,6 +184,7 @@ def test_separable_verb_not_recombined_without_dictionary() -> None:
 # Token filtering
 # ---------------------------------------------------------------------------
 
+
 def test_stopwords_excluded() -> None:
     tokens = [FakeToken(i=0, text="de", lemma="de", pos="NOUN", dep="det", is_stop=True)]
     vocab = _extractor(tokens).extract_from_text("de")
@@ -230,6 +242,7 @@ def test_excluded_lemma_filtered_out() -> None:
 # Aggregation: counts and surface forms
 # ---------------------------------------------------------------------------
 
+
 def test_count_increments_across_segments() -> None:
     """Same lemma appearing in two segments - count must be 2."""
     tokens = [_noun(0, "gebouw")]
@@ -243,10 +256,12 @@ def test_count_increments_across_segments() -> None:
 
 def test_surface_forms_collected_across_segments() -> None:
     """Different surface forms of the same lemma are all recorded."""
-    calls = iter([
-        FakeDoc([_noun(0, "gebouwen", "gebouw")]),
-        FakeDoc([_noun(0, "gebouw", "gebouw")]),
-    ])
+    calls = iter(
+        [
+            FakeDoc([_noun(0, "gebouwen", "gebouw")]),
+            FakeDoc([_noun(0, "gebouw", "gebouw")]),
+        ]
+    )
 
     def multi_nlp(text: str):
         doc = next(calls)
@@ -273,6 +288,7 @@ def test_multiple_distinct_lemmas_all_present() -> None:
 # Example sentence and timestamp
 # ---------------------------------------------------------------------------
 
+
 def test_example_sentence_captured_from_first_segment() -> None:
     tokens = [_noun(0, "gebouw")]
     vocab = _extractor(tokens).extract_from_segments([{"text": "Het grote gebouw"}])
@@ -288,10 +304,12 @@ def test_example_timestamp_from_first_segment() -> None:
 
 def test_example_not_overwritten_by_later_segment() -> None:
     """Once an example sentence is set, later occurrences must not replace it."""
-    calls = iter([
-        FakeDoc([_noun(0, "gebouw")]),
-        FakeDoc([_noun(0, "gebouw")]),
-    ])
+    calls = iter(
+        [
+            FakeDoc([_noun(0, "gebouw")]),
+            FakeDoc([_noun(0, "gebouw")]),
+        ]
+    )
 
     def multi_nlp(text: str):
         doc = next(calls)
@@ -301,10 +319,12 @@ def test_example_not_overwritten_by_later_segment() -> None:
         return doc
 
     extractor = VocabularyExtractor(nlp=multi_nlp)
-    vocab = extractor.extract_from_segments([
-        {"text": "eerste gebouw", "start": 1.0},
-        {"text": "tweede gebouw", "start": 2.0},
-    ])
+    vocab = extractor.extract_from_segments(
+        [
+            {"text": "eerste gebouw", "start": 1.0},
+            {"text": "tweede gebouw", "start": 2.0},
+        ]
+    )
     assert vocab["gebouw"]["example_sentence"] == "eerste gebouw"
     assert vocab["gebouw"]["example_timestamp"] == 1.0
 

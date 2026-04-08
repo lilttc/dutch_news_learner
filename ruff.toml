@@ -1,11 +1,11 @@
-line-length = 88
+line-length = 100
 
 [lint]
 # E402: scripts use sys.path.insert() before imports - unavoidable pattern
 # E712: SQLAlchemy filters use == True / == False / == None for SQL semantics
-# E501: line too long - not enforced yet; existing code has long prompt strings
-#       and SQL queries. Re-enable once the codebase is cleaned up.
-ignore = ["E712", "E501"]
+# Lines that genuinely cannot be shortened (LLM prompt strings, SQL DDL,
+# JS/CSS inside f-strings) are marked with # noqa: E501 inline.
+ignore = ["E712"]
 
 [lint.per-file-ignores]
 "scripts/*.py" = ["E402"]

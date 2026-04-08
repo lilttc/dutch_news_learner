@@ -20,10 +20,26 @@ EXCLUDE_LEMMAS = {"journaal"}
 
 # Particles that can form separable verbs in Dutch.
 # When split: "Ze vallen gebouwen aan" → particle "aan" + verb "vallen" = "aanvallen".
-SEPARABLE_PARTICLES = frozenset({
-    "aan", "af", "bij", "door", "in", "mee", "na", "neer",
-    "om", "op", "over", "terug", "toe", "uit", "voor", "weg",
-})
+SEPARABLE_PARTICLES = frozenset(
+    {
+        "aan",
+        "af",
+        "bij",
+        "door",
+        "in",
+        "mee",
+        "na",
+        "neer",
+        "om",
+        "op",
+        "over",
+        "terug",
+        "toe",
+        "uit",
+        "voor",
+        "weg",
+    }
+)
 
 # spaCy dependency labels that indicate a separable verb particle
 _SVP_DEP_LABELS = frozenset({"svp", "compound:prt", "compound"})
@@ -36,9 +52,7 @@ def _get_spacy_nlp():
     try:
         return spacy.load("nl_core_news_md")
     except OSError:
-        raise OSError(
-            "Dutch spaCy model not found. Run: python -m spacy download nl_core_news_md"
-        )
+        raise OSError("Dutch spaCy model not found. Run: python -m spacy download nl_core_news_md")
 
 
 class SeparableVerbRecombiner:

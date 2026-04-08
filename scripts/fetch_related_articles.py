@@ -77,11 +77,13 @@ def search_nos_articles(
                 url = item.get("href", "")
                 if "nos.nl" not in url:
                     continue
-                results.append({
-                    "title": item.get("title", ""),
-                    "url": url,
-                    "snippet": item.get("body", ""),
-                })
+                results.append(
+                    {
+                        "title": item.get("title", ""),
+                        "url": url,
+                        "snippet": item.get("body", ""),
+                    }
+                )
             return results
 
         except Exception as e:
@@ -92,7 +94,7 @@ def search_nos_articles(
                 or "DecodeError" in err_str
             )
             if is_rate_limit and attempt < MAX_RETRIES - 1:
-                backoff = BASE_DELAY_SECONDS * (2 ** attempt) + random.uniform(1, 3)
+                backoff = BASE_DELAY_SECONDS * (2**attempt) + random.uniform(1, 3)
                 print(f"(rate-limited, waiting {backoff:.0f}s)...", end=" ", flush=True)
                 time.sleep(backoff)
                 continue
@@ -126,10 +128,14 @@ def fetch_articles_for_episode(
     # Build date range: episode date ± 7 days
     timelimit = None
     if episode.published_at:
-        dt = episode.published_at.date() if hasattr(episode.published_at, "date") else episode.published_at
+        dt = (
+            episode.published_at.date()
+            if hasattr(episode.published_at, "date")
+            else episode.published_at
+        )
         start = dt - timedelta(days=7)
         end = dt + timedelta(days=7)
-        timelimit = f"cdr:1,cd_min:{start.month:02d}/{start.day:02d}/{start.year},cd_max:{end.month:02d}/{end.day:02d}/{end.year}"
+        timelimit = f"cdr:1,cd_min:{start.month:02d}/{start.day:02d}/{start.year},cd_max:{end.month:02d}/{end.day:02d}/{end.year}"  # noqa: E501
 
     all_articles = []
     for i, topic in enumerate(topic_list):
@@ -152,14 +158,16 @@ def fetch_articles_for_episode(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Fetch related NOS articles for episode topics"
-    )
+    parser = argparse.ArgumentParser(description="Fetch related NOS articles for episode topics")
     parser.add_argument("--all", action="store_true", help="Re-fetch for all episodes with topics")
     parser.add_argument("--max", type=int, metavar="N", help="Process only N most recent episodes")
     parser.add_argument("--episode-id", type=int, metavar="ID", help="Process only this episode")
     parser.add_argument("--dry-run", action="store_true", help="Preview without saving")
-    parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var, then SQLite fallback)")
+    parser.add_argument(
+        "--db",
+        default=None,
+        help="Database URL (default: DATABASE_URL env var, then SQLite fallback)",
+    )
     args = parser.parse_args()
 
     engine = get_engine(args.db)

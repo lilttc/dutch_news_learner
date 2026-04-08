@@ -49,7 +49,7 @@ def _build_prompt(words: list[dict]) -> str:
     """Build the LLM prompt for a batch of words."""
     lines = []
     for i, w in enumerate(words, 1):
-        parts = [f'{i}. {w["lemma"]} ({w["pos"]})']
+        parts = [f"{i}. {w['lemma']} ({w['pos']})"]
         if w.get("example"):
             parts.append(f'  Example: "{w["example"]}"')
         lines.append("\n".join(parts))
@@ -102,10 +102,15 @@ def enrich_batch(client: OpenAI, words: list[dict]) -> list[str | None]:
 
             definitions = json.loads(raw)
             if isinstance(definitions, list) and len(definitions) >= len(words):
-                return [d if isinstance(d, str) and d.strip() else None for d in definitions[: len(words)]]
+                return [
+                    d if isinstance(d, str) and d.strip() else None
+                    for d in definitions[: len(words)]
+                ]
             if isinstance(definitions, list):
                 padded = definitions + [None] * (len(words) - len(definitions))
-                return [d if isinstance(d, str) and d.strip() else None for d in padded[: len(words)]]
+                return [
+                    d if isinstance(d, str) and d.strip() else None for d in padded[: len(words)]
+                ]
 
         except (json.JSONDecodeError, KeyError, IndexError) as e:
             if attempt < MAX_RETRIES - 1:
@@ -159,8 +164,7 @@ def get_missing_vocab(session, max_words: int | None = None) -> list[dict]:
 
     rows = query.all()
     return [
-        {"id": r[0], "lemma": r[1], "pos": r[2] or "UNKNOWN", "example": r[3] or ""}
-        for r in rows
+        {"id": r[0], "lemma": r[1], "pos": r[2] or "UNKNOWN", "example": r[3] or ""} for r in rows
     ]
 
 
@@ -170,11 +174,18 @@ def main():
     )
     parser.add_argument("--all", action="store_true", help="Process all missing words")
     parser.add_argument(
-        "--max", type=int, metavar="N", default=200,
+        "--max",
+        type=int,
+        metavar="N",
+        default=200,
         help="Max words to process (default: 200)",
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview without saving")
-    parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var, then SQLite fallback)")
+    parser.add_argument(
+        "--db",
+        default=None,
+        help="Database URL (default: DATABASE_URL env var, then SQLite fallback)",
+    )
     args = parser.parse_args()
 
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -195,9 +206,13 @@ def main():
         return
 
     total_in_db = session.query(VocabularyItem).count()
-    total_missing = session.query(VocabularyItem).filter(
-        or_(VocabularyItem.translation == None, VocabularyItem.translation == "")  # noqa: E711
-    ).count()
+    total_missing = (
+        session.query(VocabularyItem)
+        .filter(
+            or_(VocabularyItem.translation == None, VocabularyItem.translation == "")  # noqa: E711
+        )
+        .count()
+    )
 
     print("=" * 60)
     print("Dutch News Learner - LLM Vocabulary Enrichment")

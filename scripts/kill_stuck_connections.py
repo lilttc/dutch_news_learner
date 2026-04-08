@@ -5,10 +5,13 @@ Terminate stuck Postgres connections (ALTER TABLE, long-running DELETEs, idle tr
 Use when check_locks.py shows a deadlock of old migrations blocking extraction.
 Safe to run - only kills other backends, not the current connection.
 """
+
 import os
 import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from dotenv import load_dotenv
+
 load_dotenv()
 from src.models import get_engine
 from sqlalchemy import text
@@ -19,7 +22,8 @@ with engine.connect() as conn:
     print(f"Our PID: {my_pid} (will not terminate)")
 
     # Find stuck: ALTER TABLE, long-running DELETE, or idle-in-transaction > 5 min
-    rows = conn.execute(text("""
+    rows = conn.execute(
+        text("""
         SELECT pid, state, left(query, 80) as query, now() - query_start as duration
         FROM pg_stat_activity
         WHERE datname = current_database()
@@ -29,7 +33,9 @@ with engine.connect() as conn:
             OR (query ILIKE '%DELETE FROM episode_vocabulary%' AND state = 'active')
             OR (state = 'idle in transaction' AND now() - query_start > interval '5 minutes')
           )
-    """), {"my_pid": my_pid}).fetchall()
+    """),
+        {"my_pid": my_pid},
+    ).fetchall()
 
     if not rows:
         print("No stuck connections found.")

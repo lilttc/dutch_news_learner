@@ -20,6 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from dotenv import load_dotenv
+
 load_dotenv(PROJECT_ROOT / ".env")
 
 import streamlit as st
@@ -91,9 +92,7 @@ def _streamlit_build_export_rows(
 
     if not kwargs:
         return build_export_rows(session, lookup, user_id, statuses_arg, has_note)
-    return build_export_rows(
-        session, lookup, user_id, statuses_arg, has_note, **kwargs
-    )
+    return build_export_rows(session, lookup, user_id, statuses_arg, has_note, **kwargs)
 
 
 def _streamlit_export_rows_to_csv(fieldnames, rows, *, header_aliases=None):
@@ -117,7 +116,7 @@ EXCLUDE_LEMMAS = {"journaal"}
 
 def fix_concatenated_spaces(text: str) -> str:
     """
-    Fix missing spaces in Dutch text from search snippets (e.g. "deverkiezingenheeft" -> "de verkiezingen heeft").
+    Fix missing spaces in Dutch text from search snippets (e.g. "deverkiezingenheeft" -> "de verkiezingen heeft").  # noqa: E501
     DuckDuckGo and similar sources sometimes return concatenated words.
     """
     if not text or not isinstance(text, str):
@@ -127,7 +126,21 @@ def fix_concatenated_spaces(text: str) -> str:
     text = re.sub(r"\bhet(?=[a-z]{2,})", r"het ", text, flags=re.IGNORECASE)
     text = re.sub(r"\been(?=[a-z]{2,})", r"een ", text, flags=re.IGNORECASE)
     # Insert space before common Dutch function words when concatenated (lowercase letter before)
-    for word in ("heeft", "hebben", "is", "zijn", "van", "op", "te", "dat", "die", "voor", "met", "naar", "uit"):
+    for word in (
+        "heeft",
+        "hebben",
+        "is",
+        "zijn",
+        "van",
+        "op",
+        "te",
+        "dat",
+        "die",
+        "voor",
+        "met",
+        "naar",
+        "uit",
+    ):
         text = re.sub(rf"([a-z])({word})\b", r"\1 \2", text)
     return text
 
@@ -144,7 +157,7 @@ def get_db_engine():
 
 
 def get_db_session():
-    """Create a fresh session for this request. Close it when done to return connections to the pool."""
+    """Create a fresh session for this request. Close it when done to return connections to the pool."""  # noqa: E501
     return get_session(get_db_engine())
 
 
@@ -202,9 +215,7 @@ def load_user_vocab_for_ids(session, user_id, vocabulary_ids):
         .filter(UserVocabulary.vocabulary_id.in_(vocabulary_ids))
         .all()
     )
-    return {
-        row.vocabulary_id: (row.status, row.user_sentence) for row in rows
-    }
+    return {row.vocabulary_id: (row.status, row.user_sentence) for row in rows}
 
 
 def set_vocab_status(session, vocabulary_id, status, user_id=1):
@@ -217,9 +228,7 @@ def set_vocab_status(session, vocabulary_id, status, user_id=1):
     if row:
         row.status = status
     else:
-        row = UserVocabulary(
-            user_id=user_id, vocabulary_id=vocabulary_id, status=status
-        )
+        row = UserVocabulary(user_id=user_id, vocabulary_id=vocabulary_id, status=status)
         session.add(row)
     session.commit()
 
@@ -269,9 +278,7 @@ def _persist_vocab_status_click(vocabulary_id: int, status: str, user_id: int) -
     st.session_state["_vocab_status_changed"] = True
 
 
-def _persist_vocab_note_save(
-    vocabulary_id: int, user_id: int, note_key: str
-) -> None:
+def _persist_vocab_note_save(vocabulary_id: int, user_id: int, note_key: str) -> None:
     """Save learner note from session_state (for st.button on_click)."""
     raw = st.session_state.get(note_key, "") or ""
     text = raw.strip() or None
@@ -285,9 +292,7 @@ def _persist_vocab_note_save(
 def is_episode_watched(session, user_id: int, episode_id: int) -> bool:
     """True if this user explicitly marked the episode as watched."""
     return (
-        session.query(UserEpisodeWatch)
-        .filter_by(user_id=user_id, episode_id=episode_id)
-        .first()
+        session.query(UserEpisodeWatch).filter_by(user_id=user_id, episode_id=episode_id).first()
         is not None
     )
 
@@ -300,11 +305,7 @@ def set_episode_watched(session, user_id: int, episode_id: int) -> None:
 
 
 def clear_episode_watched(session, user_id: int, episode_id: int) -> None:
-    row = (
-        session.query(UserEpisodeWatch)
-        .filter_by(user_id=user_id, episode_id=episode_id)
-        .first()
-    )
+    row = session.query(UserEpisodeWatch).filter_by(user_id=user_id, episode_id=episode_id).first()
     if row:
         session.delete(row)
         session.commit()
@@ -348,7 +349,7 @@ def format_timestamp(seconds):
     return f"{m:02d}:{s:02d}"
 
 
-_SENTENCE_ENDERS = re.compile(r'[.!?]$')
+_SENTENCE_ENDERS = re.compile(r"[.!?]$")
 
 
 def merge_segments_into_sentences(segments):
@@ -378,22 +379,26 @@ def merge_segments_into_sentences(segments):
         buf_translations.append(tr)
 
         if _SENTENCE_ENDERS.search(text):
-            merged.append({
-                "start_time": buf_start,
-                "text": " ".join(buf_texts),
-                "translation_en": " ".join(buf_translations),
-            })
+            merged.append(
+                {
+                    "start_time": buf_start,
+                    "text": " ".join(buf_texts),
+                    "translation_en": " ".join(buf_translations),
+                }
+            )
             buf_texts = []
             buf_translations = []
             buf_start = None
 
     # Flush remaining buffer (subtitle didn't end with punctuation)
     if buf_texts:
-        merged.append({
-            "start_time": buf_start,
-            "text": " ".join(buf_texts),
-            "translation_en": " ".join(buf_translations),
-        })
+        merged.append(
+            {
+                "start_time": buf_start,
+                "text": " ".join(buf_texts),
+                "translation_en": " ".join(buf_translations),
+            }
+        )
 
     return merged
 
@@ -403,15 +408,17 @@ def render_video(video_id):
     st.markdown(
         f'<iframe id="yt-player" width="100%" height="400" '
         f'src="https://www.youtube.com/embed/{video_id}?enablejsapi=1" '
-        f'frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" '
-        f'allowfullscreen></iframe>',
+        f'frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" '  # noqa: E501
+        f"allowfullscreen></iframe>",
         unsafe_allow_html=True,
     )
 
 
 def _filter_vocab(episode_vocab_list):
     """Exclude program-name lemmas (e.g. Journaal) from vocabulary."""
-    return [ev for ev in episode_vocab_list if ev.vocabulary_item.lemma.lower() not in EXCLUDE_LEMMAS]
+    return [
+        ev for ev in episode_vocab_list if ev.vocabulary_item.lemma.lower() not in EXCLUDE_LEMMAS
+    ]
 
 
 def build_word_to_lemma_map(episode_vocab_list):
@@ -456,9 +463,13 @@ def build_vocab_bubble_data(
 
         dict_entry = lookup.lookup_with_example(v.lemma, effective_pos)
         # Meaning: Dutch definition from Wiktionary (shown as "Meaning:" in bubble)
-        gloss_nl = (dict_entry.get("gloss") if dict_entry else None)
+        gloss_nl = dict_entry.get("gloss") if dict_entry else None
         # English: QA-corrected translation > step-4 LLM translation > Wiktionary English
-        gloss_en = getattr(v, "qa_translation", None) or v.translation or (dict_entry.get("gloss_en") if dict_entry else None)
+        gloss_en = (
+            getattr(v, "qa_translation", None)
+            or v.translation
+            or (dict_entry.get("gloss_en") if dict_entry else None)
+        )
         dict_example = dict_entry.get("example") if dict_entry else None
         example = dict_example or ev.example_sentence
         meaning = gloss_nl or gloss_en or "(no definition)"
@@ -514,7 +525,7 @@ def _transcript_html(segments, video_id, word_to_lemma, vocab_data):
         e = entries[0]
         parts = []
         if e.get("pos"):
-            parts.append(f'({e["pos"]})')
+            parts.append(f"({e['pos']})")
         if e.get("meaning_en"):
             parts.append(e["meaning_en"])
         elif e.get("meaning"):
@@ -527,35 +538,46 @@ def _transcript_html(segments, video_id, word_to_lemma, vocab_data):
         yt_url = f"https://www.youtube.com/watch?v={video_id}&t={int(sent['start_time'])}s"
         text = sent["text"]
         if word_to_lemma:
+
             def replace_word(match):
                 before, core, after = match.group(1), match.group(2), match.group(3)
                 core_lower = core.lower()
                 if core_lower in word_to_lemma:
                     lemma = word_to_lemma[core_lower]
-                    lemma_attr = lemma.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
-                    word_attr = core_lower.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
-                    tip = _tooltip_text(lemma).replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
+                    lemma_attr = (
+                        lemma.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
+                    )
+                    word_attr = (
+                        core_lower.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
+                    )
+                    tip = (
+                        _tooltip_text(lemma)
+                        .replace("&", "&amp;")
+                        .replace('"', "&quot;")
+                        .replace("<", "&lt;")
+                    )
                     tip_attr = f' data-tooltip="{tip}"' if tip else ""
-                    return f'{before}<span class="dnl-vocab-word" data-lemma="{lemma_attr}" data-word="{word_attr}"{tip_attr}>{core}</span>{after}'
+                    return f'{before}<span class="dnl-vocab-word" data-lemma="{lemma_attr}" data-word="{word_attr}"{tip_attr}>{core}</span>{after}'  # noqa: E501
                 return match.group(0)
+
             text = re.sub(r"(\W*)(\w+)(\W*)", replace_word, text)
         line_html = (
             f'<div class="dnl-transcript-line">'
             f'<span class="dnl-transcript-ts">'
-            f'<a href="#" class="ts-link" data-time="{sent["start_time"]}" data-url="{yt_url}">{ts}</a>'
-            f'</span> {text}'
+            f'<a href="#" class="ts-link" data-time="{sent["start_time"]}" data-url="{yt_url}">{ts}</a>'  # noqa: E501
+            f"</span> {text}"
         )
         if sent["translation_en"]:
-            line_html += f'<div class="dnl-transcript-en" style="display:none">{sent["translation_en"]}</div>'
-        line_html += '</div>'
+            line_html += f'<div class="dnl-transcript-en" style="display:none">{sent["translation_en"]}</div>'  # noqa: E501
+        line_html += "</div>"
         transcript_lines_html.append(line_html)
 
     transcript_body = "\n".join(transcript_lines_html)
     vocab_json = json.dumps(vocab_data).replace("</", "\\u003c/")
 
     return f"""<style>
-body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margin:0; padding:8px 12px; }}
-.dnl-vocab-word {{ color:#1f77b4; text-decoration:underline dotted; cursor:pointer; position:relative; }}
+body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margin:0; padding:8px 12px; }}  # noqa: E501
+.dnl-vocab-word {{ color:#1f77b4; text-decoration:underline dotted; cursor:pointer; position:relative; }}  # noqa: E501
 .dnl-vocab-word:hover {{ color:#1565c0; text-decoration:underline solid; }}
 .dnl-vocab-word[data-tooltip]:hover::after {{
   content: attr(data-tooltip);
@@ -582,8 +604,8 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
 .dnl-bubble-mwe {{ font-size:13px; color:#6a1b9a; margin-top:4px; }}
 .dnl-bubble-links {{ font-size:12px; margin-top:8px; }}
 .dnl-bubble-links a {{ color:#1f77b4; margin-right:6px; }}
-.dnl-bubble-status {{ margin-top:10px; padding-top:8px; border-top:1px solid #eee; display:flex; gap:6px; align-items:center; }}
-.dnl-pill {{ display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:999px;
+.dnl-bubble-status {{ margin-top:10px; padding-top:8px; border-top:1px solid #eee; display:flex; gap:6px; align-items:center; }}  # noqa: E501
+.dnl-pill {{ display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:999px;  # noqa: E501
   font-size:12px; font-weight:500; border:1px solid #ddd; background:#f8f8f8; color:#999; }}
 .dnl-pill.active-new {{ background:#e3f2fd; color:#1565c0; border-color:#90caf9; }}
 .dnl-pill.active-learning {{ background:#fff3e0; color:#e65100; border-color:#ffcc80; }}
@@ -591,7 +613,7 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
 .dnl-bubble-hint {{ font-size:11px; color:#aaa; margin-top:6px; }}
 .dnl-overlay {{ position:fixed; inset:0; z-index:9998; }}
 </style>
-<label class="dnl-toggle"><input type="checkbox" id="dnl-show-translation"> Show English translation</label>
+<label class="dnl-toggle"><input type="checkbox" id="dnl-show-translation"> Show English translation</label>  # noqa: E501
 {transcript_body}
 <div id="dnl-overlay" class="dnl-overlay" style="display:none;"></div>
 <div id="dnl-bubble" class="dnl-bubble">
@@ -610,8 +632,8 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
   overlay.onclick = hideBubble;
 
   function showBubble(lemma, clickedWord, ev) {{
-    var key = (clickedWord && (vocabData[clickedWord]||vocabData[clickedWord.toLowerCase()])) ? clickedWord : lemma;
-    var entries = vocabData[key]||vocabData[key.toLowerCase()]||vocabData[lemma]||vocabData[lemma.toLowerCase()];
+    var key = (clickedWord && (vocabData[clickedWord]||vocabData[clickedWord.toLowerCase()])) ? clickedWord : lemma;  # noqa: E501
+    var entries = vocabData[key]||vocabData[key.toLowerCase()]||vocabData[lemma]||vocabData[lemma.toLowerCase()];  # noqa: E501
     if (!entries||!entries.length) return;
     var display = clickedWord||lemma;
     var html = '<div class="dnl-bubble-title">'+display+'</div>';
@@ -620,21 +642,21 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
     entries.forEach(function(e) {{
       if (e.pos) html += '<div class="dnl-bubble-section"><strong>('+e.pos+')</strong></div>';
       if (e.lemma && e.lemma.toLowerCase() !== display.toLowerCase())
-        html += '<div class="dnl-bubble-section"><strong>'+(e.pos==='VERB'?'Infinitive':'Base form')+':</strong> '+e.lemma+'</div>';
+        html += '<div class="dnl-bubble-section"><strong>'+(e.pos==='VERB'?'Infinitive':'Base form')+':</strong> '+e.lemma+'</div>';  # noqa: E501
       html += '<div class="dnl-bubble-section"><strong>Meaning:</strong> '+(e.meaning||'')+'</div>';
-      if (e.meaning_en && e.meaning_en !== e.meaning) html += '<div class="dnl-bubble-section"><strong>English:</strong> '+e.meaning_en+'</div>';
+      if (e.meaning_en && e.meaning_en !== e.meaning) html += '<div class="dnl-bubble-section"><strong>English:</strong> '+e.meaning_en+'</div>';  # noqa: E501
       if (e.forms && e.forms.length > 1)
-        html += '<div class="dnl-bubble-section"><strong>Forms:</strong> '+e.forms.join(', ')+'</div>';
+        html += '<div class="dnl-bubble-section"><strong>Forms:</strong> '+e.forms.join(', ')+'</div>';  # noqa: E501
       if (e.example)
-        html += '<div class="dnl-bubble-section"><strong>Example:</strong> <em>'+e.example+'</em></div>';
-      if (e.mwe_note) html += '<div class="dnl-bubble-section dnl-bubble-mwe"><strong>Phrase:</strong> '+e.mwe_note+'</div>';
+        html += '<div class="dnl-bubble-section"><strong>Example:</strong> <em>'+e.example+'</em></div>';  # noqa: E501
+      if (e.mwe_note) html += '<div class="dnl-bubble-section dnl-bubble-mwe"><strong>Phrase:</strong> '+e.mwe_note+'</div>';  # noqa: E501
       if (e.links && Object.keys(e.links).length) {{
         var lnks = [];
-        for (var k in e.links) lnks.push('<a href="'+e.links[k]+'" target="_blank" rel="noopener">'+k+'</a>');
-        html += '<div class="dnl-bubble-section dnl-bubble-links"><strong>Look up:</strong> '+lnks.join(' \u00b7 ')+'</div>';
+        for (var k in e.links) lnks.push('<a href="'+e.links[k]+'" target="_blank" rel="noopener">'+k+'</a>');  # noqa: E501
+        html += '<div class="dnl-bubble-section dnl-bubble-links"><strong>Look up:</strong> '+lnks.join(' \u00b7 ')+'</div>';  # noqa: E501
       }}
     }});
-    var statuses = [["new","New",""],["learning","Learning","\U0001f4d6"],["known","Known","\u2705"]];
+    var statuses = [["new","New",""],["learning","Learning","\U0001f4d6"],["known","Known","\u2705"]];  # noqa: E501
     html += '<div class="dnl-bubble-status">';
     statuses.forEach(function(s) {{
       var cls = 'dnl-pill' + (s[0]===userStatus ? ' active-'+s[0] : '');
@@ -646,7 +668,7 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
     bubble.classList.add('show');
     var rect = ev.target.getBoundingClientRect();
     var bh = bubble.offsetHeight, bw = bubble.offsetWidth;
-    var top = (window.innerHeight - rect.bottom > bh + 16) ? rect.bottom + 8 : Math.max(8, rect.top - bh - 8);
+    var top = (window.innerHeight - rect.bottom > bh + 16) ? rect.bottom + 8 : Math.max(8, rect.top - bh - 8);  # noqa: E501
     var left = Math.min(rect.left, window.innerWidth - bw - 16);
     if (left < 8) left = 8;
     bubble.style.top = top + 'px';
@@ -675,9 +697,9 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
 
   document.addEventListener('click', function(ev) {{
     var ts = ev.target.closest('.ts-link');
-    if (ts) {{ ev.preventDefault(); if (!seekVideo(parseFloat(ts.getAttribute('data-time')))) window.open(ts.getAttribute('data-url'),'_blank'); return; }}
+    if (ts) {{ ev.preventDefault(); if (!seekVideo(parseFloat(ts.getAttribute('data-time')))) window.open(ts.getAttribute('data-url'),'_blank'); return; }}  # noqa: E501
     var w = ev.target.closest('.dnl-vocab-word');
-    if (w) {{ ev.preventDefault(); ev.stopPropagation(); showBubble(w.getAttribute('data-lemma'), w.getAttribute('data-word')||w.getAttribute('data-lemma'), ev); }}
+    if (w) {{ ev.preventDefault(); ev.stopPropagation(); showBubble(w.getAttribute('data-lemma'), w.getAttribute('data-word')||w.getAttribute('data-lemma'), ev); }}  # noqa: E501
   }});
 }})();
 </script>"""
@@ -777,7 +799,8 @@ def _get_episode_vocab_data(episode_id: int):
                 # Prefer QA-corrected POS/translation when available.
                 # getattr guards against qa_* columns not yet migrated in production DB.
                 "pos": getattr(ev.vocabulary_item, "qa_pos", None) or ev.vocabulary_item.pos,
-                "translation": getattr(ev.vocabulary_item, "qa_translation", None) or ev.vocabulary_item.translation,
+                "translation": getattr(ev.vocabulary_item, "qa_translation", None)
+                or ev.vocabulary_item.translation,
                 "qa_note": getattr(ev.vocabulary_item, "qa_note", None) or "",
                 "occurrence_count": ev.occurrence_count or 0,
                 "example_sentence": ev.example_sentence,
@@ -833,15 +856,14 @@ def _render_vocabulary_fragment(episode_id):
             vocab_data = [
                 v
                 for v in vocab_data
-                if (uv_by_id.get(v["vocabulary_id"], (None, None))[0] or "new")
-                != "known"
+                if (uv_by_id.get(v["vocabulary_id"], (None, None))[0] or "new") != "known"
             ]
         if search_query:
             q = search_query.lower()
             vocab_data = [
-                v for v in vocab_data
-                if q in v["lemma"].lower()
-                or q in (v.get("surface_forms") or "").lower()
+                v
+                for v in vocab_data
+                if q in v["lemma"].lower() or q in (v.get("surface_forms") or "").lower()
             ]
         if sort_by == "alpha":
             vocab_data = sorted(vocab_data, key=lambda v: v["lemma"].lower())
@@ -854,7 +876,9 @@ def _render_vocabulary_fragment(episode_id):
 
         total = len(vocab_data)
         is_searching = bool(search_query)
-        display_vocab = vocab_data if (show_all or is_searching) else vocab_data[:DEFAULT_VOCAB_LIMIT]
+        display_vocab = (
+            vocab_data if (show_all or is_searching) else vocab_data[:DEFAULT_VOCAB_LIMIT]
+        )
 
         lookup = get_lookup()
         for v in display_vocab:
@@ -864,7 +888,11 @@ def _render_vocabulary_fragment(episode_id):
             current_status = uv_row[0] if uv_row else "new"
             saved_note = (uv_row[1] if uv_row else None) or ""
             status_icon = STATUS_ICONS.get(current_status, "")
-            label = f"{status_icon} **{v['lemma']}** ({v['pos']}) - {count}×" if status_icon else f"**{v['lemma']}** ({v['pos']}) - {count}×"
+            label = (
+                f"{status_icon} **{v['lemma']}** ({v['pos']}) - {count}×"
+                if status_icon
+                else f"**{v['lemma']}** ({v['pos']}) - {count}×"
+            )
             auto_expand = is_searching and total <= 3
 
             with st.expander(label, expanded=auto_expand, key=f"vocab_exp_{episode_id}_{vid}"):
@@ -944,9 +972,15 @@ def _render_vocabulary_fragment(episode_id):
 STATUS_ICONS = {"new": "", "learning": "📖", "known": "✅"}
 
 
-def render_vocabulary(episode_vocab_list, session=None, statuses=None,
-                      search_query="", sort_by="frequency",
-                      show_all=False, hide_known=True):
+def render_vocabulary(
+    episode_vocab_list,
+    session=None,
+    statuses=None,
+    search_query="",
+    sort_by="frequency",
+    show_all=False,
+    hide_known=True,
+):
     """
     Render vocabulary list with search, sort, status buttons, and known-word filtering.
 
@@ -964,15 +998,13 @@ def render_vocabulary(episode_vocab_list, session=None, statuses=None,
 
     if hide_known:
         episode_vocab_list = [
-            ev for ev in episode_vocab_list
-            if statuses.get(ev.vocabulary_item.id, "new") != "known"
+            ev for ev in episode_vocab_list if statuses.get(ev.vocabulary_item.id, "new") != "known"
         ]
 
     if search_query:
         q = search_query.lower().strip()
         episode_vocab_list = [
-            ev for ev in episode_vocab_list
-            if q in ev.vocabulary_item.lemma.lower()
+            ev for ev in episode_vocab_list if q in ev.vocabulary_item.lemma.lower()
         ]
 
     if sort_by == "alpha":
@@ -989,14 +1021,20 @@ def render_vocabulary(episode_vocab_list, session=None, statuses=None,
 
     total = len(sorted_vocab)
     is_searching = bool(search_query)
-    display_vocab = sorted_vocab if (show_all or is_searching) else sorted_vocab[:DEFAULT_VOCAB_LIMIT]
+    display_vocab = (
+        sorted_vocab if (show_all or is_searching) else sorted_vocab[:DEFAULT_VOCAB_LIMIT]
+    )
 
     for ev in display_vocab:
         v = ev.vocabulary_item
         count = ev.occurrence_count if ev.occurrence_count is not None else 0
         current_status = statuses.get(v.id, "new")
         status_icon = STATUS_ICONS.get(current_status, "")
-        label = f"{status_icon} **{v.lemma}** ({v.pos}) - {count}×" if status_icon else f"**{v.lemma}** ({v.pos}) - {count}×"
+        label = (
+            f"{status_icon} **{v.lemma}** ({v.pos}) - {count}×"
+            if status_icon
+            else f"**{v.lemma}** ({v.pos}) - {count}×"
+        )
 
         with st.expander(label):
             dict_entry = lookup.lookup_with_example(v.lemma, v.pos)
@@ -1050,9 +1088,7 @@ def render_vocabulary(episode_vocab_list, session=None, statuses=None,
 
 def _render_tab_transcript(episode, vocab_list, session, user_id: int):
     """Render the Transcript tab with clickable word bubbles inside the iframe."""
-    st.caption(
-        "Hover underlined words for a quick meaning. Click a word for its full definition."
-    )
+    st.caption("Hover underlined words for a quick meaning. Click a word for its full definition.")
     if not episode.subtitle_segments:
         st.info("No subtitles for this episode.")
         return
@@ -1064,9 +1100,7 @@ def _render_tab_transcript(episode, vocab_list, session, user_id: int):
         uv_map = load_user_vocab_for_ids(session, user_id, all_vids)
         statuses_by_vid = {vid: t[0] for vid, t in uv_map.items()}
     vocab_data = (
-        build_vocab_bubble_data(vocab_list, statuses_by_vid=statuses_by_vid)
-        if vocab_list
-        else None
+        build_vocab_bubble_data(vocab_list, statuses_by_vid=statuses_by_vid) if vocab_list else None
     )
 
     render_transcript(
@@ -1195,9 +1229,7 @@ def _render_tab_related_reading(episode):
             url = f"https://www.google.com/search?q={quote_plus(query)}{date_range_params}"
             st.markdown(f"- [{topic}]({url})")
 
-        st.caption(
-            "Run `python scripts/fetch_related_articles.py` to show actual article titles."
-        )
+        st.caption("Run `python scripts/fetch_related_articles.py` to show actual article titles.")
 
 
 def _resolve_user_id(session):
@@ -1282,11 +1314,7 @@ def _render_my_vocabulary_page(session, user_id: int) -> None:
         st.warning("Select at least one status, or re-select all three to include every status.")
         return
 
-    statuses_arg = (
-        None
-        if set(status_sel) == {"new", "learning", "known"}
-        else list(status_sel)
-    )
+    statuses_arg = None if set(status_sel) == {"new", "learning", "known"} else list(status_sel)
 
     has_note = None
     if note_filter == "with_note":
@@ -1328,7 +1356,7 @@ def _render_my_vocabulary_page(session, user_id: int) -> None:
         key="mv_episode_watch",
         help=(
             "You mark episodes on the episode page (**Mark episode as watched**). "
-            "A word can appear in several episodes; it’s included if **any** matching episode fits the filter."
+            "A word can appear in several episodes; it’s included if **any** matching episode fits the filter."  # noqa: E501
         ),
     )
 
@@ -1366,8 +1394,7 @@ def _render_my_vocabulary_page(session, user_id: int) -> None:
 
     st.subheader("Preview (first 10 rows)")
     preview_ui = [
-        {EXPORT_COLUMN_LABELS.get(k, k): v for k, v in row.items()}
-        for row in display_rows[:10]
+        {EXPORT_COLUMN_LABELS.get(k, k): v for k, v in row.items()} for row in display_rows[:10]
     ]
     st.dataframe(preview_ui, width="stretch")
     st.caption(f"**{len(rows)}** row(s) match - downloads include all of them.")
@@ -1456,7 +1483,7 @@ def _render_episode_detail_fragment(user_id: int) -> None:
     """
     Episode body (title, watch buttons, video, tabs).
 
-    Wrapped in @st.fragment so "Mark watched" reruns only this block, not sidebar/auth/My vocabulary setup.
+    Wrapped in @st.fragment so "Mark watched" reruns only this block, not sidebar/auth/My vocabulary setup.  # noqa: E501
     """
     idmap = st.session_state.get("_episode_label_to_id")
     lid = st.session_state.get("episode_select")
@@ -1508,11 +1535,13 @@ def _render_episode_detail_fragment(user_id: int) -> None:
 
         render_video(episode.video_id)
 
-        tab_transcript, tab_vocabulary, tab_reading = st.tabs([
-            "📝 Transcript",
-            f"📚 Vocabulary ({len(vocab_list)})",
-            "📰 Related Reading",
-        ])
+        tab_transcript, tab_vocabulary, tab_reading = st.tabs(
+            [
+                "📝 Transcript",
+                f"📚 Vocabulary ({len(vocab_list)})",
+                "📰 Related Reading",
+            ]
+        )
 
         with tab_transcript:
             _render_tab_transcript(episode, vocab_list, session, user_id)
@@ -1574,9 +1603,7 @@ def _render_main_nav_and_content() -> None:
     finally:
         list_session.close()
 
-    display_rows = (
-        [r for r in ep_rows if r[0] not in watched_ids] if hide_watched else ep_rows
-    )
+    display_rows = [r for r in ep_rows if r[0] not in watched_ids] if hide_watched else ep_rows
 
     if hide_watched and not display_rows:
         st.warning(

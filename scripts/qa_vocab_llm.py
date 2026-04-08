@@ -57,7 +57,9 @@ RETRY_DELAY = 2
 EVAL_LOG = Path(__file__).resolve().parent.parent / "logs" / "qa_vocab_eval.jsonl"
 
 
-def _log_eval(word: dict, qa_pos: str | None, qa_translation: str | None, qa_note: str | None) -> None:
+def _log_eval(
+    word: dict, qa_pos: str | None, qa_translation: str | None, qa_note: str | None
+) -> None:
     """Append one JSONL line per reviewed word to logs/qa_vocab_eval.jsonl.
 
     Every word gets a line - corrections and clean passes alike - so you can
@@ -69,7 +71,7 @@ def _log_eval(word: dict, qa_pos: str | None, qa_translation: str | None, qa_not
         "original_pos": word["pos"],
         "original_translation": word["translation"],
         "original_example": word["example"],
-        "qa_pos": qa_pos,               # None = model agreed with original
+        "qa_pos": qa_pos,  # None = model agreed with original
         "qa_translation": qa_translation,
         "qa_note": qa_note,
     }
@@ -82,20 +84,18 @@ def _build_prompt(words: list[dict]) -> str:
     lines = []
     for i, w in enumerate(words, 1):
         translation_str = w["translation"] if w["translation"] else "no translation available"
-        lines.append(
-            f'{i}. "{w["lemma"]}" - POS: {w["pos"]}, translation: "{translation_str}"'
-        )
+        lines.append(f'{i}. "{w["lemma"]}" - POS: {w["pos"]}, translation: "{translation_str}"')
         if w.get("example"):
             lines.append(f'   Example: "{w["example"]}"')
 
     word_block = "\n".join(lines)
-    return f"""You are a Dutch-English dictionary assistant reviewing vocabulary entries for a language-learning app.
+    return f"""You are a Dutch-English dictionary assistant reviewing vocabulary entries for a language-learning app.  # noqa: E501
 
 For each word below:
-1. Check if the existing translation is a correct, natural English dictionary definition for the lemma.
-   Only correct it when the existing translation is clearly wrong (e.g. in Dutch, gibberish, or factually incorrect).
-   Output null if the translation is already reasonable - even if you'd phrase it slightly differently.
-2. Check if this word is part of a fixed Dutch multi-word expression or idiom (e.g. "ten slotte", "zorgen voor").
+1. Check if the existing translation is a correct, natural English dictionary definition for the lemma.  # noqa: E501
+   Only correct it when the existing translation is clearly wrong (e.g. in Dutch, gibberish, or factually incorrect).  # noqa: E501
+   Output null if the translation is already reasonable - even if you'd phrase it slightly differently.  # noqa: E501
+2. Check if this word is part of a fixed Dutch multi-word expression or idiom (e.g. "ten slotte", "zorgen voor").  # noqa: E501
    Output null if it is not part of one.
 
 Rules:
@@ -110,8 +110,8 @@ Rules:
 Output a JSON array with one object per word, in the same order.
 Schema for each object:
   "corrected_pos":         null  (always null - do not change POS tags)
-  "corrected_translation": string or null  (only when clearly wrong - English only, dictionary base form)
-  "mwe_note":              string or null  (e.g. "part of 'ten slotte' (finally)" - null if not an MWE)
+  "corrected_translation": string or null  (only when clearly wrong - English only, dictionary base form)  # noqa: E501
+  "mwe_note":              string or null  (e.g. "part of 'ten slotte' (finally)" - null if not an MWE)  # noqa: E501
 
 Output ONLY the JSON array. No markdown, no explanations.
 
@@ -127,7 +127,9 @@ def _qa_batch(client: OpenAI, words: list[dict], model: str) -> list[dict]:
     On failure returns a list of empty dicts (no corrections applied).
     """
     prompt = _build_prompt(words)
-    empty = [{"corrected_pos": None, "corrected_translation": None, "mwe_note": None} for _ in words]
+    empty = [
+        {"corrected_pos": None, "corrected_translation": None, "mwe_note": None} for _ in words
+    ]
 
     for attempt in range(MAX_RETRIES):
         try:
@@ -173,7 +175,9 @@ def _qa_batch(client: OpenAI, words: list[dict], model: str) -> list[dict]:
     return empty
 
 
-def _get_words_to_check(session, max_words: int | None, all_words: bool, episode_id: int | None) -> list[dict]:
+def _get_words_to_check(
+    session, max_words: int | None, all_words: bool, episode_id: int | None
+) -> list[dict]:
     """
     Query vocabulary items to QA, with one example sentence per word.
     Returns list of dicts: id, lemma, pos, translation, example.
@@ -187,16 +191,13 @@ def _get_words_to_check(session, max_words: int | None, all_words: bool, episode
         .subquery()
     )
 
-    query = (
-        session.query(
-            VocabularyItem.id,
-            VocabularyItem.lemma,
-            VocabularyItem.pos,
-            VocabularyItem.translation,
-            example_subq.c.example,
-        )
-        .outerjoin(example_subq, VocabularyItem.id == example_subq.c.vocabulary_id)
-    )
+    query = session.query(
+        VocabularyItem.id,
+        VocabularyItem.lemma,
+        VocabularyItem.pos,
+        VocabularyItem.translation,
+        example_subq.c.example,
+    ).outerjoin(example_subq, VocabularyItem.id == example_subq.c.vocabulary_id)
 
     if episode_id is not None:
         query = query.join(
@@ -261,14 +262,32 @@ def main():
     parser = argparse.ArgumentParser(
         description="LLM-as-judge QA: fix POS errors, wrong translations, flag idioms"
     )
-    parser.add_argument("--all", action="store_true", help="Re-check all words (not just un-checked)")
     parser.add_argument(
-        "--max", type=int, metavar="N", default=200,
+        "--all", action="store_true", help="Re-check all words (not just un-checked)"
+    )
+    parser.add_argument(
+        "--max",
+        type=int,
+        metavar="N",
+        default=200,
         help="Max words to process in one run (default: 200)",
     )
-    parser.add_argument("--episode-id", type=int, metavar="ID", help="Only check words from this episode")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help=f"OpenAI model to use (default: {DEFAULT_MODEL})")
-    parser.add_argument("--dry-run", action="store_true", help="Show what would be checked, no changes saved")
+    parser.add_argument(
+        "--episode-id",
+        type=int,
+        metavar="ID",
+        help="Only check words from this episode",
+    )
+    parser.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help=f"OpenAI model to use (default: {DEFAULT_MODEL})",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be checked, no changes saved",
+    )
     parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var)")
     args = parser.parse_args()
 
@@ -282,16 +301,22 @@ def main():
     session = get_session(engine)
 
     max_words = None if args.all else args.max
-    words = _get_words_to_check(session, max_words=max_words, all_words=args.all, episode_id=args.episode_id)
+    words = _get_words_to_check(
+        session, max_words=max_words, all_words=args.all, episode_id=args.episode_id
+    )
 
     if not words:
         print("No vocabulary items to QA. All words already checked (use --all to re-check).")
         session.close()
         return
 
-    total_unchecked = session.query(VocabularyItem).filter(
-        or_(VocabularyItem.qa_checked == False, VocabularyItem.qa_checked == None)  # noqa: E711,E712
-    ).count()
+    total_unchecked = (
+        session.query(VocabularyItem)
+        .filter(
+            or_(VocabularyItem.qa_checked == False, VocabularyItem.qa_checked == None)  # noqa: E711,E712
+        )
+        .count()
+    )
 
     print("=" * 60)
     print("Dutch News Learner - Vocab QA Agent")
@@ -332,7 +357,9 @@ def main():
             translation_changed, mwe_flagged_item = _apply_qa_result(vocab_item, word, result)
             if translation_changed:
                 corrected_translation += 1
-                print(f"    Translation fix: {word['lemma']} \"{word['translation']}\" -> \"{vocab_item.qa_translation}\"")
+                print(
+                    f'    Translation fix: {word["lemma"]} "{word["translation"]}" -> "{vocab_item.qa_translation}"'  # noqa: E501
+                )
             if mwe_flagged_item:
                 flagged_mwe += 1
                 print(f"    MWE/idiom: {word['lemma']} - {vocab_item.qa_note}")

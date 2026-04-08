@@ -1,0 +1,22 @@
+[run]
+omit =
+    # External API wrapper - untestable without real YouTube credentials
+    src/ingestion/youtube.py
+    # Pure constants - nothing to test
+    src/config.py
+    # One-time/admin scripts - no unit test ROI
+    scripts/download_dictionary.py
+    scripts/download_dictionary_en.py
+    scripts/convert_dictionary_to_sqlite.py
+    scripts/migrate_to_postgres.py
+    scripts/kill_stuck_connections.py
+    scripts/check_locks.py
+    scripts/query_db.py
+    scripts/check_episode_needed.py
+
+[report]
+exclude_lines =
+    # Standard exclusions
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError

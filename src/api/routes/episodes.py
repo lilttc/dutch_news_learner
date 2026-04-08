@@ -130,9 +130,7 @@ def get_episode(
         db.query(Episode)
         .options(
             joinedload(Episode.subtitle_segments),
-            joinedload(Episode.episode_vocabulary).joinedload(
-                EpisodeVocabulary.vocabulary_item
-            ),
+            joinedload(Episode.episode_vocabulary).joinedload(EpisodeVocabulary.vocabulary_item),
         )
         .filter(Episode.id == episode_id)
         .first()
@@ -168,17 +166,19 @@ def get_episode(
         gloss_nl = v.translation or (entry.get("gloss") if entry else None)
         gloss_en = entry.get("gloss_en") if entry else None
 
-        vocab_out.append(VocabWordOut(
-            vocabulary_id=v.id,
-            lemma=v.lemma,
-            pos=v.pos,
-            occurrence_count=ev.occurrence_count or 0,
-            surface_forms=ev.surface_forms,
-            example_sentence=ev.example_sentence,
-            meaning=gloss_nl or gloss_en or None,
-            meaning_en=gloss_en,
-            status=user_statuses.get(v.id, "new"),
-        ))
+        vocab_out.append(
+            VocabWordOut(
+                vocabulary_id=v.id,
+                lemma=v.lemma,
+                pos=v.pos,
+                occurrence_count=ev.occurrence_count or 0,
+                surface_forms=ev.surface_forms,
+                example_sentence=ev.example_sentence,
+                meaning=gloss_nl or gloss_en or None,
+                meaning_en=gloss_en,
+                status=user_statuses.get(v.id, "new"),
+            )
+        )
     vocab_out.sort(key=lambda w: w.occurrence_count, reverse=True)
 
     # Related articles

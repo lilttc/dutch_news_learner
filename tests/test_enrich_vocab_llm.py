@@ -19,6 +19,7 @@ from scripts.enrich_vocab_llm import _build_prompt, enrich_batch
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _word(lemma="gaan", pos="VERB", example="Ik ga naar school."):
     return {"lemma": lemma, "pos": pos, "example": example}
 
@@ -35,6 +36,7 @@ def _make_client(response_text: str) -> MagicMock:
 # ---------------------------------------------------------------------------
 # _build_prompt
 # ---------------------------------------------------------------------------
+
 
 def test_build_prompt_includes_lemma_and_pos() -> None:
     prompt = _build_prompt([_word("gaan", "VERB")])
@@ -69,6 +71,7 @@ def test_build_prompt_multiple_words_all_present() -> None:
 # enrich_batch - JSON parsing
 # ---------------------------------------------------------------------------
 
+
 def test_enrich_batch_parses_valid_json_array() -> None:
     client = _make_client(json.dumps(["to go", "house"]))
     result = enrich_batch(client, [_word("gaan"), _word("huis", "NOUN")])
@@ -92,6 +95,7 @@ def test_enrich_batch_strips_plain_code_fences() -> None:
 # ---------------------------------------------------------------------------
 # enrich_batch - length normalisation
 # ---------------------------------------------------------------------------
+
 
 def test_enrich_batch_pads_short_response_with_none() -> None:
     """Model returns fewer items than input - missing positions get None."""
@@ -121,6 +125,7 @@ def test_enrich_batch_output_length_always_matches_input() -> None:
 # ---------------------------------------------------------------------------
 # enrich_batch - invalid/empty values
 # ---------------------------------------------------------------------------
+
 
 def test_enrich_batch_empty_string_becomes_none() -> None:
     client = _make_client(json.dumps(["to go", "", "big"]))

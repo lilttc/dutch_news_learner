@@ -23,6 +23,7 @@ from src.vocab_export import (
 # parse_episode_watch_param
 # ---------------------------------------------------------------------------
 
+
 def test_parse_episode_watch_none_returns_any() -> None:
     assert parse_episode_watch_param(None) == "any"
 
@@ -49,6 +50,7 @@ def test_parse_episode_watch_invalid_raises() -> None:
 # ---------------------------------------------------------------------------
 # parse_statuses_export
 # ---------------------------------------------------------------------------
+
 
 def test_parse_statuses_all_returns_none() -> None:
     assert parse_statuses_export("all") is None
@@ -86,6 +88,7 @@ def test_parse_statuses_strips_whitespace() -> None:
 # parse_export_columns
 # ---------------------------------------------------------------------------
 
+
 def test_parse_export_columns_none_returns_defaults() -> None:
     result = parse_export_columns(None)
     assert result == list(DEFAULT_EXPORT_COLUMNS)
@@ -114,6 +117,7 @@ def test_parse_export_columns_strips_whitespace() -> None:
 # format_pos_for_display
 # ---------------------------------------------------------------------------
 
+
 def test_format_pos_noun() -> None:
     assert format_pos_for_display("NOUN") == "noun"
 
@@ -138,42 +142,49 @@ def test_format_pos_case_insensitive() -> None:
 # build_anki_row
 # ---------------------------------------------------------------------------
 
+
 def test_build_anki_row_front_is_lemma() -> None:
     row = build_anki_row({"lemma": "gaan", "meaning_nl": None, "meaning_en": None})
     assert row["Front"] == "gaan"
 
 
 def test_build_anki_row_back_contains_meanings() -> None:
-    row = build_anki_row({
-        "lemma": "gaan",
-        "meaning_nl": "bewegen",
-        "meaning_en": "to go",
-        "example_episode": None,
-        "user_sentence": None,
-    })
+    row = build_anki_row(
+        {
+            "lemma": "gaan",
+            "meaning_nl": "bewegen",
+            "meaning_en": "to go",
+            "example_episode": None,
+            "user_sentence": None,
+        }
+    )
     assert "NL: bewegen" in row["Back"]
     assert "EN: to go" in row["Back"]
 
 
 def test_build_anki_row_back_contains_example() -> None:
-    row = build_anki_row({
-        "lemma": "gaan",
-        "meaning_nl": None,
-        "meaning_en": None,
-        "example_episode": "Ik ga naar school.",
-        "user_sentence": None,
-    })
+    row = build_anki_row(
+        {
+            "lemma": "gaan",
+            "meaning_nl": None,
+            "meaning_en": None,
+            "example_episode": "Ik ga naar school.",
+            "user_sentence": None,
+        }
+    )
     assert "Example: Ik ga naar school." in row["Back"]
 
 
 def test_build_anki_row_back_contains_user_sentence() -> None:
-    row = build_anki_row({
-        "lemma": "gaan",
-        "meaning_nl": None,
-        "meaning_en": None,
-        "example_episode": None,
-        "user_sentence": "Ik ga weg.",
-    })
+    row = build_anki_row(
+        {
+            "lemma": "gaan",
+            "meaning_nl": None,
+            "meaning_en": None,
+            "example_episode": None,
+            "user_sentence": "Ik ga weg.",
+        }
+    )
     assert "My note: Ik ga weg." in row["Back"]
 
 
@@ -191,6 +202,7 @@ def test_build_anki_row_missing_lemma() -> None:
 # project_export_columns
 # ---------------------------------------------------------------------------
 
+
 def test_project_export_columns_keeps_only_requested() -> None:
     row = {"lemma": "gaan", "pos": "VERB", "status": "new", "meaning_nl": "bewegen"}
     result = project_export_columns(row, ["lemma", "pos"])
@@ -205,6 +217,7 @@ def test_project_export_columns_missing_key_is_none() -> None:
 # ---------------------------------------------------------------------------
 # export_rows_to_csv
 # ---------------------------------------------------------------------------
+
 
 def test_export_rows_to_csv_header_row() -> None:
     csv_str = export_rows_to_csv(["lemma", "pos"], [{"lemma": "gaan", "pos": "VERB"}])

@@ -5,6 +5,7 @@ All tests mock the OpenAI client so no API calls are made.
 The parsing logic (numbered vs unnumbered, blank lines, padding) is what
 caused a real production bug - these tests are regression guards.
 """
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -25,6 +26,7 @@ def _make_client(response_text: str) -> MagicMock:
 # Numbered response (model echoes "1. ...", "2. ..." format)
 # ---------------------------------------------------------------------------
 
+
 def test_numbered_response_correct_order() -> None:
     client = _make_client("1. Hello\n2. The world\n3. Good morning")
     result = translate_batch(client, ["Hallo", "De wereld", "Goedemorgen"])
@@ -32,7 +34,7 @@ def test_numbered_response_correct_order() -> None:
 
 
 def test_numbered_response_with_blank_lines_no_shift() -> None:
-    """Blank lines between numbered entries must not shift translations - this was the production bug."""
+    """Blank lines between numbered entries must not shift translations - this was the production bug."""  # noqa: E501
     client = _make_client("1. Hello\n\n2. The world\n\n3. Good morning")
     result = translate_batch(client, ["Hallo", "De wereld", "Goedemorgen"])
     assert result == ["Hello", "The world", "Good morning"]
@@ -57,6 +59,7 @@ def test_numbered_response_extra_entries_truncated() -> None:
 # Unnumbered response (model ignores numbering instruction)
 # ---------------------------------------------------------------------------
 
+
 def test_unnumbered_response_correct_order() -> None:
     client = _make_client("Hello\nThe world\nGood morning")
     result = translate_batch(client, ["Hallo", "De wereld", "Goedemorgen"])
@@ -79,6 +82,7 @@ def test_unnumbered_response_blank_lines_skipped() -> None:
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
+
 
 def test_single_item_batch() -> None:
     client = _make_client("1. Hello")
