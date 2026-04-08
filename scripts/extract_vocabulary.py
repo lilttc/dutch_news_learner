@@ -9,7 +9,7 @@ By default, only processes episodes that have transcripts but no vocabulary yet 
 Use --all to re-process all episodes, or --max N to limit scope.
 
 Usage:
-    python scripts/extract_vocabulary.py                 # Only episodes missing vocabulary (incremental)
+    python scripts/extract_vocabulary.py                 # Only episodes missing vocabulary (incremental)  # noqa: E501
     python scripts/extract_vocabulary.py --all          # Process all episodes
     python scripts/extract_vocabulary.py --max 3       # Limit to 3 most recent (within scope)
 """
@@ -24,6 +24,7 @@ from typing import Optional, Tuple
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from src.dictionary import get_lookup
@@ -58,22 +59,19 @@ def extract_vocabulary_for_episode(
     Returns:
         Tuple of (vocabulary_items_created, episode_vocabulary_rows_created).
     """
-    segments = [
-        {"text": seg.text, "start": seg.start_time}
-        for seg in episode.subtitle_segments
-    ]
+    segments = [{"text": seg.text, "start": seg.start_time} for seg in episode.subtitle_segments]
 
     if not segments:
         return 0, 0
 
     t0 = time.time()
     vocab_dict = extractor.extract_from_segments(segments)
-    print(f"    NLP done: {len(vocab_dict)} lemmas ({time.time()-t0:.1f}s)", flush=True)
+    print(f"    NLP done: {len(vocab_dict)} lemmas ({time.time() - t0:.1f}s)", flush=True)
 
     if replace_existing:
         t1 = time.time()
         session.query(EpisodeVocabulary).filter_by(episode_id=episode.id).delete()
-        print(f"    DELETE done ({time.time()-t1:.1f}s)", flush=True)
+        print(f"    DELETE done ({time.time() - t1:.1f}s)", flush=True)
 
     items_created = 0
     rows_created = 0
@@ -88,9 +86,7 @@ def extract_vocabulary_for_episode(
             items_created += 1
 
         surface_forms_str = (
-            "|".join(data.get("surface_forms", []))
-            if data.get("surface_forms")
-            else None
+            "|".join(data.get("surface_forms", [])) if data.get("surface_forms") else None
         )
         ep_vocab = EpisodeVocabulary(
             episode_id=episode.id,
@@ -102,7 +98,10 @@ def extract_vocabulary_for_episode(
         )
         session.add(ep_vocab)
         rows_created += 1
-    print(f"    DB inserts done: {rows_created} rows ({time.time()-t2:.1f}s)", flush=True)
+    print(
+        f"    DB inserts done: {rows_created} rows ({time.time() - t2:.1f}s)",
+        flush=True,
+    )
 
     return items_created, rows_created
 
@@ -118,7 +117,7 @@ def run_extraction(
     Run vocabulary extraction on episodes in the database.
 
     Args:
-        max_episodes: Process only the N most recent episodes (by published_at). None = all in scope.
+        max_episodes: Process only the N most recent episodes (by published_at). None = all in scope.  # noqa: E501
         episode_id: Process only this episode ID. Overrides other filters if set.
         replace_existing: If True, replace existing vocabulary for each episode.
         incremental: If True (default), only process episodes that have no vocabulary yet.
@@ -154,7 +153,11 @@ def run_extraction(
         episodes = query.all()
 
     if not episodes:
-        msg = "No episodes need vocabulary extraction." if incremental else "No episodes with transcripts found."
+        msg = (
+            "No episodes need vocabulary extraction."
+            if incremental
+            else "No episodes with transcripts found."
+        )
         print(f"❌ {msg} Run ingest_playlist.py first.")
         session.close()
         return
@@ -213,9 +216,7 @@ def run_extraction(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Extract vocabulary from ingested episodes"
-    )
+    parser = argparse.ArgumentParser(description="Extract vocabulary from ingested episodes")
     parser.add_argument(
         "--all",
         action="store_true",

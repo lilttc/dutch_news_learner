@@ -31,12 +31,20 @@ load_dotenv()
 
 from openai import OpenAI
 
-from src.models import Episode, SubtitleSegment, _migrate_schema, get_engine, get_session
+from src.models import (
+    Episode,
+    SubtitleSegment,
+    _migrate_schema,
+    get_engine,
+    get_session,
+)
 
 MODEL = "gpt-4o-mini"
 
 
-def extract_topics(client: OpenAI, title: str, description: str, transcript_preview: str) -> list[str]:
+def extract_topics(
+    client: OpenAI, title: str, description: str, transcript_preview: str
+) -> list[str]:
     """
     Use LLM to extract 3 topic keywords for related news search.
     Returns list of 3 strings (Dutch keywords suitable for NOS search).
@@ -49,8 +57,8 @@ First lines of transcript:
     prompt = f"""This is a NOS Journaal in Makkelijke Taal episode (Dutch news in easy language).
 Extract exactly 3 descriptive Dutch search phrases for related NOS news article search.
 Each phrase should be 2-5 words that describe the specific topic, not a single vague word.
-Examples: "gaswinning in Groningen", "verbod op fatbikes", "oorlog in Oekraïne", "stijgende energieprijzen", "nieuwe klimaatwet".
-Avoid: single words like "klimaat", "politie", "olie" - be specific enough that a search will find relevant articles.
+Examples: "gaswinning in Groningen", "verbod op fatbikes", "oorlog in Oekraïne", "stijgende energieprijzen", "nieuwe klimaatwet".  # noqa: E501
+Avoid: single words like "klimaat", "politie", "olie" - be specific enough that a search will find relevant articles.  # noqa: E501
 
 Output exactly 3 phrases, one per line. No numbering, no explanations. Write in Dutch.
 
@@ -61,7 +69,10 @@ Topic phrases (one per line):"""
     response = client.chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": "You extract specific Dutch news topic phrases for search. Output only 3 phrases, one per line."},
+            {
+                "role": "system",
+                "content": "You extract specific Dutch news topic phrases for search. Output only 3 phrases, one per line.",  # noqa: E501
+            },
             {"role": "user", "content": prompt},
         ],
         temperature=0.2,
@@ -77,7 +88,9 @@ Topic phrases (one per line):"""
     return cleaned[:3]
 
 
-def extract_topics_for_episode(session, episode: Episode, client: OpenAI, dry_run: bool = False) -> str | None:
+def extract_topics_for_episode(
+    session, episode: Episode, client: OpenAI, dry_run: bool = False
+) -> str | None:
     """
     Extract topics for one episode. Returns pipe-separated string or None.
     """
@@ -112,12 +125,24 @@ def extract_topics_for_episode(session, episode: Episode, client: OpenAI, dry_ru
 
 def main():
     parser = argparse.ArgumentParser(description="Extract topic keywords for Related reading")
-    parser.add_argument("--all", action="store_true", help="Process all episodes (re-extract even those with topics)")
-    parser.add_argument("--force", action="store_true", help="Re-extract episodes that already have topics (use after prompt changes)")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Process all episodes (re-extract even those with topics)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-extract episodes that already have topics (use after prompt changes)",
+    )
     parser.add_argument("--max", type=int, metavar="N", help="Process only N most recent episodes")
     parser.add_argument("--episode-id", type=int, metavar="ID", help="Process only this episode")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be extracted")
-    parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var, then SQLite fallback)")
+    parser.add_argument(
+        "--db",
+        default=None,
+        help="Database URL (default: DATABASE_URL env var, then SQLite fallback)",
+    )
     args = parser.parse_args()
 
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -143,15 +168,17 @@ def main():
     else:
         # Incremental: only episodes missing topics (unless --all or --force)
         if not args.all and not args.force:
-            query = query.filter(
-                (Episode.topics.is_(None)) | (Episode.topics == "")
-            )
+            query = query.filter((Episode.topics.is_(None)) | (Episode.topics == ""))
         if args.max:
             query = query.limit(args.max)
         episodes = query.all()
 
     if not episodes:
-        print("No episodes need topic extraction." if not args.all else "No episodes with transcripts found.")
+        print(
+            "No episodes need topic extraction."
+            if not args.all
+            else "No episodes with transcripts found."
+        )
         sys.exit(0)
 
     print("=" * 60)

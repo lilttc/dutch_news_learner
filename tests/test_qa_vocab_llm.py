@@ -20,6 +20,7 @@ from scripts.qa_vocab_llm import _apply_qa_result, _build_prompt, _log_eval, _qa
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _word(lemma="gaan", pos="VERB", translation="to go", example="Ik ga naar school."):
     return {"lemma": lemma, "pos": pos, "translation": translation, "example": example}
 
@@ -40,6 +41,7 @@ def _vocab_item():
 # ---------------------------------------------------------------------------
 # _build_prompt
 # ---------------------------------------------------------------------------
+
 
 def test_build_prompt_includes_lemma_pos_translation() -> None:
     words = [_word("gaan", "VERB", "to go", "")]
@@ -85,15 +87,20 @@ def test_build_prompt_no_example_skips_example_line() -> None:
 # _qa_batch - JSON parsing
 # ---------------------------------------------------------------------------
 
+
 def test_qa_batch_parses_valid_json() -> None:
-    response = json.dumps([{"corrected_pos": None, "corrected_translation": "to go", "mwe_note": None}])
+    response = json.dumps(
+        [{"corrected_pos": None, "corrected_translation": "to go", "mwe_note": None}]
+    )
     client = _make_client(response)
     results = _qa_batch(client, [_word()], model="gpt-4o")
     assert results[0]["corrected_translation"] == "to go"
 
 
 def test_qa_batch_strips_markdown_fences() -> None:
-    payload = json.dumps([{"corrected_pos": None, "corrected_translation": "to go", "mwe_note": None}])
+    payload = json.dumps(
+        [{"corrected_pos": None, "corrected_translation": "to go", "mwe_note": None}]
+    )
     response = f"```json\n{payload}\n```"
     client = _make_client(response)
     results = _qa_batch(client, [_word()], model="gpt-4o")
@@ -103,7 +110,9 @@ def test_qa_batch_strips_markdown_fences() -> None:
 def test_qa_batch_pads_short_response() -> None:
     """Model returns fewer items than input - pad with empty dicts."""
     words = [_word("gaan"), _word("houden"), _word("zijn")]
-    response = json.dumps([{"corrected_pos": None, "corrected_translation": "to go", "mwe_note": None}])
+    response = json.dumps(
+        [{"corrected_pos": None, "corrected_translation": "to go", "mwe_note": None}]
+    )
     client = _make_client(response)
     results = _qa_batch(client, words, model="gpt-4o")
     assert len(results) == 3
@@ -123,6 +132,7 @@ def test_qa_batch_returns_empty_dicts_on_invalid_json() -> None:
 # ---------------------------------------------------------------------------
 # _apply_qa_result - echo detection and write logic
 # ---------------------------------------------------------------------------
+
 
 def test_apply_writes_new_translation() -> None:
     item = _vocab_item()
@@ -163,7 +173,10 @@ def test_apply_null_translation_not_written() -> None:
 def test_apply_writes_mwe_note() -> None:
     item = _vocab_item()
     word = _word("slotte")
-    result = {"corrected_translation": None, "mwe_note": "part of 'ten slotte' (finally)"}
+    result = {
+        "corrected_translation": None,
+        "mwe_note": "part of 'ten slotte' (finally)",
+    }
     _, mwe = _apply_qa_result(item, word, result)
     assert mwe is True
     assert item.qa_note == "part of 'ten slotte' (finally)"
@@ -189,6 +202,7 @@ def test_apply_strips_whitespace_from_translation() -> None:
 # ---------------------------------------------------------------------------
 # _log_eval - JSONL output
 # ---------------------------------------------------------------------------
+
 
 def test_log_eval_writes_jsonl_line(tmp_path: Path) -> None:
     word = _word("gaan", "VERB", "to go", "Ik ga naar school.")

@@ -107,7 +107,7 @@ class YouTubePlaylistFetcher:
             self.youtube = build("youtube", "v3", developerKey=self.api_key)
         except ImportError:
             raise ImportError(
-                "google-api-python-client required. Install with: pip install google-api-python-client"
+                "google-api-python-client required. Install with: pip install google-api-python-client"  # noqa: E501
             )
 
     def fetch_playlist_videos(

@@ -22,6 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from psycopg2.extras import execute_values
@@ -94,9 +95,7 @@ def insert_batch(conn, table: str, rows: list[dict]):
         )
 
 
-def migrate_table(
-    sqlite_engine, pg_engine, table: str, dry_run: bool
-) -> tuple[int, int, int]:
+def migrate_table(sqlite_engine, pg_engine, table: str, dry_run: bool) -> tuple[int, int, int]:
     """Migrate one table. Returns (sqlite_count, pg_before, inserted)."""
     sqlite_count = count_rows(sqlite_engine, table)
     pg_before = count_rows(pg_engine, table)
@@ -127,9 +126,7 @@ def reset_sequences(pg_engine, tables: list[str]):
     with pg_engine.begin() as conn:
         for table in tables:
             try:
-                max_id = conn.execute(
-                    text(f"SELECT COALESCE(MAX(id), 0) FROM {table}")
-                ).scalar()
+                max_id = conn.execute(text(f"SELECT COALESCE(MAX(id), 0) FROM {table}")).scalar()
                 seq_name = f"{table}_id_seq"
                 conn.execute(
                     text(f"SELECT setval('{seq_name}', :val, true)"),

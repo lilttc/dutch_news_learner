@@ -131,7 +131,7 @@ class SubtitleSegment(Base):
     episode = relationship("Episode", back_populates="subtitle_segments")
 
     def __repr__(self):
-        return f"<SubtitleSegment(video_id='{self.video_id}', start={self.start_time}, text='{self.text[:30]}...')>"
+        return f"<SubtitleSegment(video_id='{self.video_id}', start={self.start_time}, text='{self.text[:30]}...')>"  # noqa: E501
 
 
 class VocabularyItem(Base):
@@ -156,9 +156,9 @@ class VocabularyItem(Base):
     # LLM-as-judge QA corrections (step 8 of pipeline).
     # When set, the display layer uses these in preference to pos/translation.
     qa_checked = Column(Boolean, default=False)  # True once this word has been QA'd
-    qa_pos = Column(String(20))          # Corrected POS (None = original was correct)
-    qa_translation = Column(Text)        # Context-corrected translation (None = original was correct)
-    qa_note = Column(Text)              # Free text: MWE/idiom info, e.g. "part of 'ten slotte' (finally)"
+    qa_pos = Column(String(20))  # Corrected POS (None = original was correct)
+    qa_translation = Column(Text)  # Context-corrected translation (None = original was correct)
+    qa_note = Column(Text)  # Free text: MWE/idiom info, e.g. "part of 'ten slotte' (finally)"
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -232,9 +232,7 @@ class UserVocabulary(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, nullable=False, default=1, index=True)
-    vocabulary_id = Column(
-        Integer, ForeignKey("vocabulary_items.id"), nullable=False, index=True
-    )
+    vocabulary_id = Column(Integer, ForeignKey("vocabulary_items.id"), nullable=False, index=True)
     status = Column(
         String(20), nullable=False, default="new", index=True
     )  # "new", "learning", "known"
@@ -246,7 +244,7 @@ class UserVocabulary(Base):
     vocabulary_item = relationship("VocabularyItem", backref="user_vocabulary")
 
     def __repr__(self):
-        return f"<UserVocabulary(user={self.user_id}, vocab={self.vocabulary_id}, status='{self.status}')>"
+        return f"<UserVocabulary(user={self.user_id}, vocab={self.vocabulary_id}, status='{self.status}')>"  # noqa: E501
 
 
 class UserEpisodeWatch(Base):
@@ -258,9 +256,7 @@ class UserEpisodeWatch(Base):
     """
 
     __tablename__ = "user_episode_watches"
-    __table_args__ = (
-        UniqueConstraint("user_id", "episode_id", name="uq_user_episode_watch"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "episode_id", name="uq_user_episode_watch"),)
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, nullable=False, index=True)
@@ -285,9 +281,7 @@ class EpisodeVocabulary(Base):
 
     id = Column(Integer, primary_key=True)
     episode_id = Column(Integer, ForeignKey("episodes.id"), nullable=False, index=True)
-    vocabulary_id = Column(
-        Integer, ForeignKey("vocabulary_items.id"), nullable=False, index=True
-    )
+    vocabulary_id = Column(Integer, ForeignKey("vocabulary_items.id"), nullable=False, index=True)
 
     occurrence_count = Column(Integer, nullable=False, default=1)
     example_sentence = Column(Text)  # Best example from this episode
@@ -298,12 +292,10 @@ class EpisodeVocabulary(Base):
 
     # Relationships
     episode = relationship("Episode", back_populates="episode_vocabulary")
-    vocabulary_item = relationship(
-        "VocabularyItem", back_populates="episode_vocabulary"
-    )
+    vocabulary_item = relationship("VocabularyItem", back_populates="episode_vocabulary")
 
     def __repr__(self):
-        return f"<EpisodeVocabulary(episode_id={self.episode_id}, vocab_id={self.vocabulary_id}, count={self.occurrence_count})>"
+        return f"<EpisodeVocabulary(episode_id={self.episode_id}, vocab_id={self.vocabulary_id}, count={self.occurrence_count})>"  # noqa: E501
 
 
 # ---------------------------------------------------------------------------
@@ -431,7 +423,7 @@ def _migrate_schema(engine):
                 updated_at TIMESTAMP
             )""",
             "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_user_id ON user_vocabulary(user_id)",
-            "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_vocabulary_id ON user_vocabulary(vocabulary_id)",
+            "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_vocabulary_id ON user_vocabulary(vocabulary_id)",  # noqa: E501
             "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_status ON user_vocabulary(status)",
             # Phase 6E: anonymous sessions for per-user vocab
             f"""CREATE TABLE IF NOT EXISTS anonymous_sessions (
@@ -465,7 +457,7 @@ def _migrate_schema(engine):
             # One row per (user_id, vocabulary_id): remove stragglers, then unique index
             """DELETE FROM user_vocabulary a USING user_vocabulary b
                WHERE a.user_id = b.user_id AND a.vocabulary_id = b.vocabulary_id AND a.id < b.id""",
-            "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_vocabulary_user_vocab ON user_vocabulary (user_id, vocabulary_id)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_vocabulary_user_vocab ON user_vocabulary (user_id, vocabulary_id)",  # noqa: E501
             # Explicit "mark episode watched" per user (same user_id space as user_vocabulary)
             f"""CREATE TABLE IF NOT EXISTS user_episode_watches (
                 id {pk},
@@ -474,8 +466,8 @@ def _migrate_schema(engine):
                 watched_at TIMESTAMP NOT NULL DEFAULT NOW(),
                 CONSTRAINT uq_user_episode_watch UNIQUE (user_id, episode_id)
             )""",
-            "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_user_id ON user_episode_watches(user_id)",
-            "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_episode_id ON user_episode_watches(episode_id)",
+            "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_user_id ON user_episode_watches(user_id)",  # noqa: E501
+            "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_episode_id ON user_episode_watches(episode_id)",  # noqa: E501
             # Step 8: LLM-as-judge vocab QA corrections
             _pg_add_column("vocabulary_items", "qa_checked", "BOOLEAN DEFAULT FALSE"),
             _pg_add_column("vocabulary_items", "qa_pos", "TEXT"),
@@ -497,7 +489,7 @@ def _migrate_schema(engine):
                 updated_at TIMESTAMP
             )""",
             "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_user_id ON user_vocabulary(user_id)",
-            "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_vocabulary_id ON user_vocabulary(vocabulary_id)",
+            "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_vocabulary_id ON user_vocabulary(vocabulary_id)",  # noqa: E501
             "CREATE INDEX IF NOT EXISTS ix_user_vocabulary_status ON user_vocabulary(status)",
             # Phase 6E: anonymous sessions for per-user vocab
             f"""CREATE TABLE IF NOT EXISTS anonymous_sessions (
@@ -507,7 +499,7 @@ def _migrate_schema(engine):
             )""",
             "CREATE INDEX IF NOT EXISTS ix_anonymous_sessions_token ON anonymous_sessions(token)",
             # Reserve id=1 for legacy; real sessions get id=2+ (SQLite: OR IGNORE)
-            "INSERT OR IGNORE INTO anonymous_sessions (id, token, created_at) VALUES (1, '__legacy__', datetime('now'))",
+            "INSERT OR IGNORE INTO anonymous_sessions (id, token, created_at) VALUES (1, '__legacy__', datetime('now'))",  # noqa: E501
             # Phase 6F: users table (SQLite: no sequence; first insert uses 1000000)
             """CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -517,7 +509,7 @@ def _migrate_schema(engine):
             )""",
             "CREATE INDEX IF NOT EXISTS ix_users_email ON users(email)",
             # SQLite: insert placeholder so next id is 1000000 (AUTOINCREMENT uses max+1)
-            "INSERT OR IGNORE INTO users (id, email, password_hash, created_at) VALUES (999999, '__internal_seed_6f__', '', datetime('now'))",
+            "INSERT OR IGNORE INTO users (id, email, password_hash, created_at) VALUES (999999, '__internal_seed_6f__', '', datetime('now'))",  # noqa: E501
             "ALTER TABLE user_vocabulary ADD COLUMN user_sentence TEXT",
             """DELETE FROM user_vocabulary WHERE id IN (
                 SELECT id FROM (
@@ -526,7 +518,7 @@ def _migrate_schema(engine):
                     ON a.user_id = b.user_id AND a.vocabulary_id = b.vocabulary_id AND a.id < b.id
                 )
             )""",
-            "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_vocabulary_user_vocab ON user_vocabulary (user_id, vocabulary_id)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_vocabulary_user_vocab ON user_vocabulary (user_id, vocabulary_id)",  # noqa: E501
             f"""CREATE TABLE IF NOT EXISTS user_episode_watches (
                 id {pk},
                 user_id INTEGER NOT NULL,
@@ -534,8 +526,8 @@ def _migrate_schema(engine):
                 watched_at TIMESTAMP NOT NULL,
                 UNIQUE (user_id, episode_id)
             )""",
-            "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_user_id ON user_episode_watches(user_id)",
-            "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_episode_id ON user_episode_watches(episode_id)",
+            "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_user_id ON user_episode_watches(user_id)",  # noqa: E501
+            "CREATE INDEX IF NOT EXISTS ix_user_episode_watches_episode_id ON user_episode_watches(episode_id)",  # noqa: E501
             # Step 8: LLM-as-judge vocab QA corrections
             "ALTER TABLE vocabulary_items ADD COLUMN qa_checked BOOLEAN DEFAULT FALSE",
             "ALTER TABLE vocabulary_items ADD COLUMN qa_pos TEXT",

@@ -32,15 +32,18 @@ def _lookup(entries):
 # Core regression guard: gloss_en (English) must be used, not gloss (Dutch)
 # ---------------------------------------------------------------------------
 
+
 def test_translation_set_to_gloss_en() -> None:
     """item.translation is set to gloss_en, not to gloss."""
     item = _item("houden", "VERB")
-    lookup = _lookup({
-        "houden": {
-            "gloss": "niet laten varen, het bezit ervan niet verliezen",
-            "gloss_en": "to keep, preserve",
+    lookup = _lookup(
+        {
+            "houden": {
+                "gloss": "niet laten varen, het bezit ervan niet verliezen",
+                "gloss_en": "to keep, preserve",
+            }
         }
-    })
+    )
     enrich_items([item], lookup)
     assert item.translation == "to keep, preserve"
 
@@ -48,12 +51,14 @@ def test_translation_set_to_gloss_en() -> None:
 def test_gloss_dutch_never_written_to_translation() -> None:
     """Even if gloss (Dutch) is present, it must never end up in translation."""
     item = _item("houden", "VERB")
-    lookup = _lookup({
-        "houden": {
-            "gloss": "niet laten varen, het bezit ervan niet verliezen",
-            "gloss_en": "to keep, preserve",
+    lookup = _lookup(
+        {
+            "houden": {
+                "gloss": "niet laten varen, het bezit ervan niet verliezen",
+                "gloss_en": "to keep, preserve",
+            }
         }
-    })
+    )
     enrich_items([item], lookup)
     assert item.translation != "niet laten varen, het bezit ervan niet verliezen"
 
@@ -61,9 +66,11 @@ def test_gloss_dutch_never_written_to_translation() -> None:
 def test_no_gloss_en_means_no_update() -> None:
     """If the entry has no gloss_en key, item.translation is left unchanged."""
     item = _item("houden", "VERB", translation=None)
-    lookup = _lookup({
-        "houden": {"gloss": "niet laten varen"}  # no gloss_en
-    })
+    lookup = _lookup(
+        {
+            "houden": {"gloss": "niet laten varen"}  # no gloss_en
+        }
+    )
     enrich_items([item], lookup)
     assert item.translation is None
 
@@ -71,6 +78,7 @@ def test_no_gloss_en_means_no_update() -> None:
 # ---------------------------------------------------------------------------
 # Dry-run behaviour
 # ---------------------------------------------------------------------------
+
 
 def test_dry_run_does_not_modify_translation() -> None:
     """dry_run=True → item.translation is never written."""
@@ -91,6 +99,7 @@ def test_dry_run_still_counts_as_updated() -> None:
 # ---------------------------------------------------------------------------
 # Return value counts
 # ---------------------------------------------------------------------------
+
 
 def test_counts_updated_and_not_found() -> None:
     items = [
@@ -122,6 +131,7 @@ def test_empty_items_returns_zero_counts() -> None:
 # Overwrite behaviour (--all mode: caller passes all items, not just missing)
 # ---------------------------------------------------------------------------
 
+
 def test_existing_translation_is_overwritten() -> None:
     """When caller passes an item that already has a translation, enrich_items overwrites it."""
     item = _item("gaan", "VERB", translation="old stale value")
@@ -131,7 +141,7 @@ def test_existing_translation_is_overwritten() -> None:
 
 
 def test_item_with_translation_not_updated_if_not_in_lookup() -> None:
-    """If the item has a translation but the word is absent from the dictionary, keep the original."""
+    """If the item has a translation but the word is absent from the dictionary, keep the original."""  # noqa: E501
     item = _item("xyzunknown", "NOUN", translation="existing")
     lookup = _lookup({})
     enrich_items([item], lookup)

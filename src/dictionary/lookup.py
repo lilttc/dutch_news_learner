@@ -134,21 +134,33 @@ class DictionaryLookup:
                 (key, pos),
             ).fetchone()
             if row:
-                return {"gloss": row["gloss"], "gloss_en": row["gloss_en"], "example": row["example"]}
+                return {
+                    "gloss": row["gloss"],
+                    "gloss_en": row["gloss_en"],
+                    "example": row["example"],
+                }
             # Try OTHER fallback
             row = self._conn.execute(
                 "SELECT gloss, gloss_en, example FROM glosses WHERE lemma = ? AND pos = 'OTHER'",
                 (key,),
             ).fetchone()
             if row:
-                return {"gloss": row["gloss"], "gloss_en": row["gloss_en"], "example": row["example"]}
+                return {
+                    "gloss": row["gloss"],
+                    "gloss_en": row["gloss_en"],
+                    "example": row["example"],
+                }
         # No POS or no match: return first available entry
         row = self._conn.execute(
             "SELECT gloss, gloss_en, example FROM glosses WHERE lemma = ? LIMIT 1",
             (key,),
         ).fetchone()
         if row:
-            return {"gloss": row["gloss"], "gloss_en": row["gloss_en"], "example": row["example"]}
+            return {
+                "gloss": row["gloss"],
+                "gloss_en": row["gloss_en"],
+                "example": row["example"],
+            }
         return None
 
     def _get_entry_json(self, lemma: str, pos: Optional[str] = None):

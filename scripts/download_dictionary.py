@@ -23,15 +23,23 @@ from urllib.request import urlretrieve
 # Add project root
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent / "data" / "dictionary" / "dutch_glosses.json"
+DEFAULT_OUTPUT = (
+    Path(__file__).resolve().parent.parent / "data" / "dictionary" / "dutch_glosses.json"
+)
 DOWNLOAD_URL = "https://kaikki.org/dictionary/downloads/nl/nl-extract.jsonl.gz"
 
 # Map Wiktionary pos to normalized form (for matching with spaCy)
 POS_MAP = {
-    "noun": "NOUN", "n": "NOUN", "proper noun": "NOUN", "proper-noun": "NOUN",
-    "verb": "VERB", "v": "VERB",
-    "adj": "ADJ", "adjective": "ADJ",
-    "adv": "ADV", "adverb": "ADV",
+    "noun": "NOUN",
+    "n": "NOUN",
+    "proper noun": "NOUN",
+    "proper-noun": "NOUN",
+    "verb": "VERB",
+    "v": "VERB",
+    "adj": "ADJ",
+    "adjective": "ADJ",
+    "adv": "ADV",
+    "adverb": "ADV",
 }
 
 
@@ -72,7 +80,7 @@ def extract_entry(entry: dict) -> list[tuple]:
 
     results = []
     for sense in senses:
-        # Skip inflected/form senses - they give wrong meanings (e.g. "olie" = "1st person of oliën")
+        # Skip inflected/form senses - they give wrong meanings (e.g. "olie" = "1st person of oliën")  # noqa: E501
         if sense.get("form_of") or sense.get("alt_of"):
             continue
 
@@ -184,9 +192,7 @@ def main():
         json.dump(result, f, ensure_ascii=False, indent=0)
 
     print(f"Saved to {output_path}")
-    en_count = sum(
-        1 for poses in result.values() for p in poses.values() if p.get("gloss_en")
-    )
+    en_count = sum(1 for poses in result.values() for p in poses.values() if p.get("gloss_en"))
     if en_count:
         print(f"  ({en_count} entries include English gloss)")
     print()

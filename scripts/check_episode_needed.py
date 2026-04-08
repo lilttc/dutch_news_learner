@@ -8,6 +8,7 @@ No time window or date filter - runs whenever the workflow is triggered.
 
 Used by GitHub Actions. Prints "true" if pipeline should run, "false" to skip.
 """
+
 import sys
 from pathlib import Path
 

@@ -27,6 +27,7 @@ from src.api.auth import (
 # Password hashing
 # ---------------------------------------------------------------------------
 
+
 def test_hash_and_verify_password() -> None:
     hashed = hash_password("mysecretpassword")
     assert verify_password("mysecretpassword", hashed) is True
@@ -46,6 +47,7 @@ def test_hash_is_not_plaintext() -> None:
 # ---------------------------------------------------------------------------
 # JWT round-trip
 # ---------------------------------------------------------------------------
+
 
 def test_create_and_decode_token() -> None:
     token = create_access_token(user_id=42, email="test@example.com")
@@ -79,6 +81,7 @@ def test_token_contains_expiry() -> None:
 # ---------------------------------------------------------------------------
 # get_secret_key fallback behaviour
 # ---------------------------------------------------------------------------
+
 
 def test_get_secret_key_uses_env_var() -> None:
     with patch.dict(os.environ, {"SECRET_KEY": "my-test-secret-key-long-enough"}):

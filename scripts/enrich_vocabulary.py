@@ -20,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from sqlalchemy import or_
@@ -51,9 +52,17 @@ def enrich_items(items, lookup, dry_run=False):
 
 def main():
     parser = argparse.ArgumentParser(description="Enrich vocabulary with dictionary translations")
-    parser.add_argument("--all", action="store_true", help="Overwrite all items, not just those missing a translation")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Overwrite all items, not just those missing a translation",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Show what would be updated")
-    parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var, then SQLite fallback)")
+    parser.add_argument(
+        "--db",
+        default=None,
+        help="Database URL (default: DATABASE_URL env var, then SQLite fallback)",
+    )
     args = parser.parse_args()
 
     lookup = get_lookup()

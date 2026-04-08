@@ -21,18 +21,20 @@ from src.models import (
     VocabularyItem,
 )
 
-EXPORT_COLUMN_KEYS = frozenset({
-    "vocabulary_id",
-    "lemma",
-    "pos",
-    "status",
-    "user_sentence",
-    "meaning_nl",
-    "meaning_en",
-    "example_episode",
-    "episode_title",
-    "episode_id",
-})
+EXPORT_COLUMN_KEYS = frozenset(
+    {
+        "vocabulary_id",
+        "lemma",
+        "pos",
+        "status",
+        "user_sentence",
+        "meaning_nl",
+        "meaning_en",
+        "example_episode",
+        "episode_title",
+        "episode_id",
+    }
+)
 
 DEFAULT_EXPORT_COLUMNS = (
     "lemma",
@@ -176,20 +178,15 @@ def _vocabulary_ids_for_episode_watch_filter(
     if mode == EPISODE_WATCH_ANY:
         return None
     if mode == EPISODE_WATCH_WATCHED_ONLY:
-        q = (
-            db.query(EpisodeVocabulary.vocabulary_id)
-            .join(
-                UserEpisodeWatch,
-                (UserEpisodeWatch.episode_id == EpisodeVocabulary.episode_id)
-                & (UserEpisodeWatch.user_id == user_id),
-            )
+        q = db.query(EpisodeVocabulary.vocabulary_id).join(
+            UserEpisodeWatch,
+            (UserEpisodeWatch.episode_id == EpisodeVocabulary.episode_id)
+            & (UserEpisodeWatch.user_id == user_id),
         )
         return {r[0] for r in q.distinct().all()}
     if mode == EPISODE_WATCH_UNWATCHED_ONLY:
         watched_rows = (
-            db.query(UserEpisodeWatch.episode_id)
-            .filter(UserEpisodeWatch.user_id == user_id)
-            .all()
+            db.query(UserEpisodeWatch.episode_id).filter(UserEpisodeWatch.user_id == user_id).all()
         )
         watched_ids = [r[0] for r in watched_rows]
         q = db.query(EpisodeVocabulary.vocabulary_id)
@@ -278,7 +275,7 @@ def build_export_rows(
     has_note: True / False / None (no filter).
     episode_date_from / episode_date_to: only words that appear in at least one episode
     whose published_at date falls in the range (inclusive). Example column uses the same window.
-    episode_watch: any | watched_only | unwatched_only (see _vocabulary_ids_for_episode_watch_filter).
+    episode_watch: any | watched_only | unwatched_only (see _vocabulary_ids_for_episode_watch_filter).  # noqa: E501
     """
     q = (
         db.query(UserVocabulary, VocabularyItem)
@@ -286,14 +283,10 @@ def build_export_rows(
         .filter(UserVocabulary.user_id == user_id)
     )
     vocab_sets: list[set[int]] = []
-    vids_by_date = _vocabulary_ids_in_episode_date_range(
-        db, episode_date_from, episode_date_to
-    )
+    vids_by_date = _vocabulary_ids_in_episode_date_range(db, episode_date_from, episode_date_to)
     if vids_by_date is not None:
         vocab_sets.append(vids_by_date)
-    vids_by_watch = _vocabulary_ids_for_episode_watch_filter(
-        db, user_id, episode_watch
-    )
+    vids_by_watch = _vocabulary_ids_for_episode_watch_filter(db, user_id, episode_watch)
     if vids_by_watch is not None:
         vocab_sets.append(vids_by_watch)
     if vocab_sets:
@@ -385,11 +378,7 @@ def export_rows_to_csv(
 ) -> str:
     """Write CSV rows; optional header_aliases map internal keys to human column titles."""
     buf = StringIO()
-    headers = (
-        [header_aliases.get(f, f) for f in fieldnames]
-        if header_aliases
-        else fieldnames
-    )
+    headers = [header_aliases.get(f, f) for f in fieldnames] if header_aliases else fieldnames
     w = csv.writer(buf, lineterminator="\n")
     w.writerow(headers)
     for row in data:

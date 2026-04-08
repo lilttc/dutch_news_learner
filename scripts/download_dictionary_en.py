@@ -28,9 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 DICT_DIR = Path(__file__).resolve().parent.parent / "data" / "dictionary"
 GLOSSES_PATH = DICT_DIR / "dutch_glosses.json"
 EN_EXTRACT_PATH = DICT_DIR / "en-wiktionary-dutch.jsonl"
-DOWNLOAD_URL = (
-    "https://kaikki.org/dictionary/Dutch/kaikki.org-dictionary-Dutch.jsonl"
-)
+DOWNLOAD_URL = "https://kaikki.org/dictionary/Dutch/kaikki.org-dictionary-Dutch.jsonl"
 
 POS_MAP = {
     "noun": "NOUN",
@@ -203,15 +201,19 @@ def main():
         description="Download English glosses for Dutch words from EN Wiktionary"
     )
     parser.add_argument(
-        "--input", type=Path,
+        "--input",
+        type=Path,
         help="Use a local JSONL file instead of downloading",
     )
     parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Show stats without saving changes",
     )
     parser.add_argument(
-        "--output", type=Path, default=GLOSSES_PATH,
+        "--output",
+        type=Path,
+        default=GLOSSES_PATH,
         help="Path to dutch_glosses.json",
     )
     args = parser.parse_args()
@@ -246,7 +248,8 @@ def main():
         with open(args.output, encoding="utf-8") as f:
             existing = json.load(f)
         existing_en_count = sum(
-            1 for poses in existing.values()
+            1
+            for poses in existing.values()
             if isinstance(poses, dict)
             for p in poses.values()
             if isinstance(p, dict) and p.get("gloss_en")
@@ -263,7 +266,8 @@ def main():
     print(f"  New entries added: {new_entries}")
 
     final_en_count = sum(
-        1 for poses in existing.values()
+        1
+        for poses in existing.values()
         if isinstance(poses, dict)
         for p in poses.values()
         if isinstance(p, dict) and p.get("gloss_en")
