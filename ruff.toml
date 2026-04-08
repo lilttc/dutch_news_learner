@@ -1,0 +1,9 @@
+[lint]
+# E402: scripts use sys.path.insert() before imports - unavoidable pattern
+# E712: SQLAlchemy filters use == True / == False / == None for SQL semantics
+ignore = ["E712"]
+
+[lint.per-file-ignores]
+"scripts/*.py" = ["E402"]
+"app/main.py" = ["E402"]
+"src/api/main.py" = ["E402"]

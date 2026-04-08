@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Quick check of active connections and locks on Neon."""
-import os, sys
+import os
+import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from dotenv import load_dotenv; load_dotenv()
+from dotenv import load_dotenv
+load_dotenv()
 from src.models import get_engine
 from sqlalchemy import text
 
