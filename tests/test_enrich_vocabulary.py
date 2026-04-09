@@ -141,7 +141,7 @@ def test_existing_translation_is_overwritten() -> None:
 
 
 def test_item_with_translation_not_updated_if_not_in_lookup() -> None:
-    """If the item has a translation but the word is absent from the dictionary, keep the original."""  # noqa: E501
+    """If the item has a translation but the word is absent from the dictionary, keep the original."""
     item = _item("xyzunknown", "NOUN", translation="existing")
     lookup = _lookup({})
     enrich_items([item], lookup)

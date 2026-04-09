@@ -32,13 +32,7 @@ load_dotenv()
 from openai import OpenAI
 from sqlalchemy import or_
 
-from src.models import (
-    Episode,
-    SubtitleSegment,
-    _migrate_schema,
-    get_engine,
-    get_session,
-)
+from src.models import Episode, SubtitleSegment, _migrate_schema, get_engine, get_session
 
 # Batch size for API calls (balance cost vs latency)
 BATCH_SIZE = 12
@@ -52,8 +46,8 @@ def translate_batch(client: OpenAI, texts: list[str]) -> list[str]:
     Translate a batch of Dutch texts to English.
     Returns one translation per input, same order.
     """
-    numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(texts))
-    prompt = f"""Translate these Dutch sentences to English. They are from NOS news in easy language.  # noqa: E501
+    numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(texts))
+    prompt = f"""Translate these Dutch sentences to English. They are from NOS news in easy language.
 Output exactly one English translation per line, in the same order. No numbering, no explanations.
 Preserve the tone (news, factual). Keep proper nouns (names, places) as-is.
 
@@ -148,14 +142,12 @@ def main():
         description="Translate subtitle segments to English via OpenAI"
     )
     parser.add_argument(
-        "--all",
-        action="store_true",
-        help="Process all episodes (re-process even fully translated)",
+        "--all", action="store_true", help="Process all episodes (re-process even fully translated)"
     )
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Re-translate segments that already have a translation (use after fixing pipeline bugs)",  # noqa: E501
+        help="Re-translate segments that already have a translation (use after fixing pipeline bugs)",
     )
     parser.add_argument("--max", type=int, metavar="N", help="Process only N most recent episodes")
     parser.add_argument("--episode-id", type=int, metavar="ID", help="Process only this episode")

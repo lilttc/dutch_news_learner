@@ -31,13 +31,7 @@ load_dotenv()
 
 from openai import OpenAI
 
-from src.models import (
-    Episode,
-    SubtitleSegment,
-    _migrate_schema,
-    get_engine,
-    get_session,
-)
+from src.models import Episode, SubtitleSegment, _migrate_schema, get_engine, get_session
 
 MODEL = "gpt-4o-mini"
 
@@ -57,8 +51,8 @@ First lines of transcript:
     prompt = f"""This is a NOS Journaal in Makkelijke Taal episode (Dutch news in easy language).
 Extract exactly 3 descriptive Dutch search phrases for related NOS news article search.
 Each phrase should be 2-5 words that describe the specific topic, not a single vague word.
-Examples: "gaswinning in Groningen", "verbod op fatbikes", "oorlog in Oekraïne", "stijgende energieprijzen", "nieuwe klimaatwet".  # noqa: E501
-Avoid: single words like "klimaat", "politie", "olie" - be specific enough that a search will find relevant articles.  # noqa: E501
+Examples: "gaswinning in Groningen", "verbod op fatbikes", "oorlog in Oekraïne", "stijgende energieprijzen", "nieuwe klimaatwet".
+Avoid: single words like "klimaat", "politie", "olie" - be specific enough that a search will find relevant articles.
 
 Output exactly 3 phrases, one per line. No numbering, no explanations. Write in Dutch.
 
@@ -71,7 +65,7 @@ Topic phrases (one per line):"""
         messages=[
             {
                 "role": "system",
-                "content": "You extract specific Dutch news topic phrases for search. Output only 3 phrases, one per line.",  # noqa: E501
+                "content": "You extract specific Dutch news topic phrases for search. Output only 3 phrases, one per line.",
             },
             {"role": "user", "content": prompt},
         ],

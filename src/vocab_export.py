@@ -275,7 +275,7 @@ def build_export_rows(
     has_note: True / False / None (no filter).
     episode_date_from / episode_date_to: only words that appear in at least one episode
     whose published_at date falls in the range (inclusive). Example column uses the same window.
-    episode_watch: any | watched_only | unwatched_only (see _vocabulary_ids_for_episode_watch_filter).  # noqa: E501
+    episode_watch: any | watched_only | unwatched_only (see _vocabulary_ids_for_episode_watch_filter).
     """
     q = (
         db.query(UserVocabulary, VocabularyItem)

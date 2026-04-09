@@ -34,7 +34,7 @@ def test_numbered_response_correct_order() -> None:
 
 
 def test_numbered_response_with_blank_lines_no_shift() -> None:
-    """Blank lines between numbered entries must not shift translations - this was the production bug."""  # noqa: E501
+    """Blank lines between numbered entries must not shift translations - this was the production bug."""
     client = _make_client("1. Hello\n\n2. The world\n\n3. Good morning")
     result = translate_batch(client, ["Hallo", "De wereld", "Goedemorgen"])
     assert result == ["Hello", "The world", "Good morning"]

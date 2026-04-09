@@ -3,11 +3,14 @@ line-length = 100
 [lint]
 # E402: scripts use sys.path.insert() before imports - unavoidable pattern
 # E712: SQLAlchemy filters use == True / == False / == None for SQL semantics
-# Lines that genuinely cannot be shortened (LLM prompt strings, SQL DDL,
-# JS/CSS inside f-strings) are marked with # noqa: E501 inline.
+# E501: Files with embedded HTML/JS/CSS templates, LLM prompt strings, or
+# SQL DDL cannot be line-split meaningfully. NEVER use # noqa: E501 inside
+# multi-line strings — the comment text becomes part of the rendered output.
 ignore = ["E712"]
 
 [lint.per-file-ignores]
-"scripts/*.py" = ["E402"]
-"app/main.py" = ["E402"]
+"scripts/*.py" = ["E402", "E501"]
+"app/main.py" = ["E402", "E501"]
 "src/api/main.py" = ["E402"]
+"src/models/db.py" = ["E501"]
+"src/vocab_export.py" = ["E501"]

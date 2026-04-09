@@ -116,7 +116,7 @@ EXCLUDE_LEMMAS = {"journaal"}
 
 def fix_concatenated_spaces(text: str) -> str:
     """
-    Fix missing spaces in Dutch text from search snippets (e.g. "deverkiezingenheeft" -> "de verkiezingen heeft").  # noqa: E501
+    Fix missing spaces in Dutch text from search snippets (e.g. "deverkiezingenheeft" -> "de verkiezingen heeft").
     DuckDuckGo and similar sources sometimes return concatenated words.
     """
     if not text or not isinstance(text, str):
@@ -157,7 +157,7 @@ def get_db_engine():
 
 
 def get_db_session():
-    """Create a fresh session for this request. Close it when done to return connections to the pool."""  # noqa: E501
+    """Create a fresh session for this request. Close it when done to return connections to the pool."""
     return get_session(get_db_engine())
 
 
@@ -408,7 +408,7 @@ def render_video(video_id):
     st.markdown(
         f'<iframe id="yt-player" width="100%" height="400" '
         f'src="https://www.youtube.com/embed/{video_id}?enablejsapi=1" '
-        f'frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" '  # noqa: E501
+        f'frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" '
         f"allowfullscreen></iframe>",
         unsafe_allow_html=True,
     )
@@ -525,7 +525,7 @@ def _transcript_html(segments, video_id, word_to_lemma, vocab_data):
         e = entries[0]
         parts = []
         if e.get("pos"):
-            parts.append(f"({e['pos']})")
+            parts.append(f'({e["pos"]})')
         if e.get("meaning_en"):
             parts.append(e["meaning_en"])
         elif e.get("meaning"):
@@ -557,18 +557,18 @@ def _transcript_html(segments, video_id, word_to_lemma, vocab_data):
                         .replace("<", "&lt;")
                     )
                     tip_attr = f' data-tooltip="{tip}"' if tip else ""
-                    return f'{before}<span class="dnl-vocab-word" data-lemma="{lemma_attr}" data-word="{word_attr}"{tip_attr}>{core}</span>{after}'  # noqa: E501
+                    return f'{before}<span class="dnl-vocab-word" data-lemma="{lemma_attr}" data-word="{word_attr}"{tip_attr}>{core}</span>{after}'
                 return match.group(0)
 
             text = re.sub(r"(\W*)(\w+)(\W*)", replace_word, text)
         line_html = (
             f'<div class="dnl-transcript-line">'
             f'<span class="dnl-transcript-ts">'
-            f'<a href="#" class="ts-link" data-time="{sent["start_time"]}" data-url="{yt_url}">{ts}</a>'  # noqa: E501
-            f"</span> {text}"
+            f'<a href="#" class="ts-link" data-time="{sent["start_time"]}" data-url="{yt_url}">{ts}</a>'
+            f'</span> {text}'
         )
         if sent["translation_en"]:
-            line_html += f'<div class="dnl-transcript-en" style="display:none">{sent["translation_en"]}</div>'  # noqa: E501
+            line_html += f'<div class="dnl-transcript-en" style="display:none">{sent["translation_en"]}</div>'
         line_html += "</div>"
         transcript_lines_html.append(line_html)
 
@@ -576,8 +576,8 @@ def _transcript_html(segments, video_id, word_to_lemma, vocab_data):
     vocab_json = json.dumps(vocab_data).replace("</", "\\u003c/")
 
     return f"""<style>
-body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margin:0; padding:8px 12px; }}  # noqa: E501
-.dnl-vocab-word {{ color:#1f77b4; text-decoration:underline dotted; cursor:pointer; position:relative; }}  # noqa: E501
+body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margin:0; padding:8px 12px; }}
+.dnl-vocab-word {{ color:#1f77b4; text-decoration:underline dotted; cursor:pointer; position:relative; }}
 .dnl-vocab-word:hover {{ color:#1565c0; text-decoration:underline solid; }}
 .dnl-vocab-word[data-tooltip]:hover::after {{
   content: attr(data-tooltip);
@@ -604,8 +604,8 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
 .dnl-bubble-mwe {{ font-size:13px; color:#6a1b9a; margin-top:4px; }}
 .dnl-bubble-links {{ font-size:12px; margin-top:8px; }}
 .dnl-bubble-links a {{ color:#1f77b4; margin-right:6px; }}
-.dnl-bubble-status {{ margin-top:10px; padding-top:8px; border-top:1px solid #eee; display:flex; gap:6px; align-items:center; }}  # noqa: E501
-.dnl-pill {{ display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:999px;  # noqa: E501
+.dnl-bubble-status {{ margin-top:10px; padding-top:8px; border-top:1px solid #eee; display:flex; gap:6px; align-items:center; }}
+.dnl-pill {{ display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:999px;
   font-size:12px; font-weight:500; border:1px solid #ddd; background:#f8f8f8; color:#999; }}
 .dnl-pill.active-new {{ background:#e3f2fd; color:#1565c0; border-color:#90caf9; }}
 .dnl-pill.active-learning {{ background:#fff3e0; color:#e65100; border-color:#ffcc80; }}
@@ -613,7 +613,7 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
 .dnl-bubble-hint {{ font-size:11px; color:#aaa; margin-top:6px; }}
 .dnl-overlay {{ position:fixed; inset:0; z-index:9998; }}
 </style>
-<label class="dnl-toggle"><input type="checkbox" id="dnl-show-translation"> Show English translation</label>  # noqa: E501
+<label class="dnl-toggle"><input type="checkbox" id="dnl-show-translation"> Show English translation</label>
 {transcript_body}
 <div id="dnl-overlay" class="dnl-overlay" style="display:none;"></div>
 <div id="dnl-bubble" class="dnl-bubble">
@@ -632,8 +632,8 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
   overlay.onclick = hideBubble;
 
   function showBubble(lemma, clickedWord, ev) {{
-    var key = (clickedWord && (vocabData[clickedWord]||vocabData[clickedWord.toLowerCase()])) ? clickedWord : lemma;  # noqa: E501
-    var entries = vocabData[key]||vocabData[key.toLowerCase()]||vocabData[lemma]||vocabData[lemma.toLowerCase()];  # noqa: E501
+    var key = (clickedWord && (vocabData[clickedWord]||vocabData[clickedWord.toLowerCase()])) ? clickedWord : lemma;
+    var entries = vocabData[key]||vocabData[key.toLowerCase()]||vocabData[lemma]||vocabData[lemma.toLowerCase()];
     if (!entries||!entries.length) return;
     var display = clickedWord||lemma;
     var html = '<div class="dnl-bubble-title">'+display+'</div>';
@@ -642,21 +642,21 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
     entries.forEach(function(e) {{
       if (e.pos) html += '<div class="dnl-bubble-section"><strong>('+e.pos+')</strong></div>';
       if (e.lemma && e.lemma.toLowerCase() !== display.toLowerCase())
-        html += '<div class="dnl-bubble-section"><strong>'+(e.pos==='VERB'?'Infinitive':'Base form')+':</strong> '+e.lemma+'</div>';  # noqa: E501
+        html += '<div class="dnl-bubble-section"><strong>'+(e.pos==='VERB'?'Infinitive':'Base form')+':</strong> '+e.lemma+'</div>';
       html += '<div class="dnl-bubble-section"><strong>Meaning:</strong> '+(e.meaning||'')+'</div>';
-      if (e.meaning_en && e.meaning_en !== e.meaning) html += '<div class="dnl-bubble-section"><strong>English:</strong> '+e.meaning_en+'</div>';  # noqa: E501
+      if (e.meaning_en && e.meaning_en !== e.meaning) html += '<div class="dnl-bubble-section"><strong>English:</strong> '+e.meaning_en+'</div>';
       if (e.forms && e.forms.length > 1)
-        html += '<div class="dnl-bubble-section"><strong>Forms:</strong> '+e.forms.join(', ')+'</div>';  # noqa: E501
+        html += '<div class="dnl-bubble-section"><strong>Forms:</strong> '+e.forms.join(', ')+'</div>';
       if (e.example)
-        html += '<div class="dnl-bubble-section"><strong>Example:</strong> <em>'+e.example+'</em></div>';  # noqa: E501
-      if (e.mwe_note) html += '<div class="dnl-bubble-section dnl-bubble-mwe"><strong>Phrase:</strong> '+e.mwe_note+'</div>';  # noqa: E501
+        html += '<div class="dnl-bubble-section"><strong>Example:</strong> <em>'+e.example+'</em></div>';
+      if (e.mwe_note) html += '<div class="dnl-bubble-section dnl-bubble-mwe"><strong>Phrase:</strong> '+e.mwe_note+'</div>';
       if (e.links && Object.keys(e.links).length) {{
         var lnks = [];
-        for (var k in e.links) lnks.push('<a href="'+e.links[k]+'" target="_blank" rel="noopener">'+k+'</a>');  # noqa: E501
-        html += '<div class="dnl-bubble-section dnl-bubble-links"><strong>Look up:</strong> '+lnks.join(' \u00b7 ')+'</div>';  # noqa: E501
+        for (var k in e.links) lnks.push('<a href="'+e.links[k]+'" target="_blank" rel="noopener">'+k+'</a>');
+        html += '<div class="dnl-bubble-section dnl-bubble-links"><strong>Look up:</strong> '+lnks.join(' \u00b7 ')+'</div>';
       }}
     }});
-    var statuses = [["new","New",""],["learning","Learning","\U0001f4d6"],["known","Known","\u2705"]];  # noqa: E501
+    var statuses = [["new","New",""],["learning","Learning","\U0001f4d6"],["known","Known","\u2705"]];
     html += '<div class="dnl-bubble-status">';
     statuses.forEach(function(s) {{
       var cls = 'dnl-pill' + (s[0]===userStatus ? ' active-'+s[0] : '');
@@ -668,7 +668,7 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
     bubble.classList.add('show');
     var rect = ev.target.getBoundingClientRect();
     var bh = bubble.offsetHeight, bw = bubble.offsetWidth;
-    var top = (window.innerHeight - rect.bottom > bh + 16) ? rect.bottom + 8 : Math.max(8, rect.top - bh - 8);  # noqa: E501
+    var top = (window.innerHeight - rect.bottom > bh + 16) ? rect.bottom + 8 : Math.max(8, rect.top - bh - 8);
     var left = Math.min(rect.left, window.innerWidth - bw - 16);
     if (left < 8) left = 8;
     bubble.style.top = top + 'px';
@@ -697,9 +697,9 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
 
   document.addEventListener('click', function(ev) {{
     var ts = ev.target.closest('.ts-link');
-    if (ts) {{ ev.preventDefault(); if (!seekVideo(parseFloat(ts.getAttribute('data-time')))) window.open(ts.getAttribute('data-url'),'_blank'); return; }}  # noqa: E501
+    if (ts) {{ ev.preventDefault(); if (!seekVideo(parseFloat(ts.getAttribute('data-time')))) window.open(ts.getAttribute('data-url'),'_blank'); return; }}
     var w = ev.target.closest('.dnl-vocab-word');
-    if (w) {{ ev.preventDefault(); ev.stopPropagation(); showBubble(w.getAttribute('data-lemma'), w.getAttribute('data-word')||w.getAttribute('data-lemma'), ev); }}  # noqa: E501
+    if (w) {{ ev.preventDefault(); ev.stopPropagation(); showBubble(w.getAttribute('data-lemma'), w.getAttribute('data-word')||w.getAttribute('data-lemma'), ev); }}
   }});
 }})();
 </script>"""
@@ -1356,7 +1356,7 @@ def _render_my_vocabulary_page(session, user_id: int) -> None:
         key="mv_episode_watch",
         help=(
             "You mark episodes on the episode page (**Mark episode as watched**). "
-            "A word can appear in several episodes; it’s included if **any** matching episode fits the filter."  # noqa: E501
+            "A word can appear in several episodes; it’s included if **any** matching episode fits the filter."
         ),
     )
 
@@ -1483,7 +1483,7 @@ def _render_episode_detail_fragment(user_id: int) -> None:
     """
     Episode body (title, watch buttons, video, tabs).
 
-    Wrapped in @st.fragment so "Mark watched" reruns only this block, not sidebar/auth/My vocabulary setup.  # noqa: E501
+    Wrapped in @st.fragment so "Mark watched" reruns only this block, not sidebar/auth/My vocabulary setup.
     """
     idmap = st.session_state.get("_episode_label_to_id")
     lid = st.session_state.get("episode_select")

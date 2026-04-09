@@ -9,7 +9,7 @@ By default, only processes episodes that have transcripts but no vocabulary yet 
 Use --all to re-process all episodes, or --max N to limit scope.
 
 Usage:
-    python scripts/extract_vocabulary.py                 # Only episodes missing vocabulary (incremental)  # noqa: E501
+    python scripts/extract_vocabulary.py                 # Only episodes missing vocabulary (incremental)
     python scripts/extract_vocabulary.py --all          # Process all episodes
     python scripts/extract_vocabulary.py --max 3       # Limit to 3 most recent (within scope)
 """
@@ -66,12 +66,12 @@ def extract_vocabulary_for_episode(
 
     t0 = time.time()
     vocab_dict = extractor.extract_from_segments(segments)
-    print(f"    NLP done: {len(vocab_dict)} lemmas ({time.time() - t0:.1f}s)", flush=True)
+    print(f"    NLP done: {len(vocab_dict)} lemmas ({time.time()-t0:.1f}s)", flush=True)
 
     if replace_existing:
         t1 = time.time()
         session.query(EpisodeVocabulary).filter_by(episode_id=episode.id).delete()
-        print(f"    DELETE done ({time.time() - t1:.1f}s)", flush=True)
+        print(f"    DELETE done ({time.time()-t1:.1f}s)", flush=True)
 
     items_created = 0
     rows_created = 0
@@ -98,10 +98,7 @@ def extract_vocabulary_for_episode(
         )
         session.add(ep_vocab)
         rows_created += 1
-    print(
-        f"    DB inserts done: {rows_created} rows ({time.time() - t2:.1f}s)",
-        flush=True,
-    )
+    print(f"    DB inserts done: {rows_created} rows ({time.time()-t2:.1f}s)", flush=True)
 
     return items_created, rows_created
 
@@ -117,7 +114,7 @@ def run_extraction(
     Run vocabulary extraction on episodes in the database.
 
     Args:
-        max_episodes: Process only the N most recent episodes (by published_at). None = all in scope.  # noqa: E501
+        max_episodes: Process only the N most recent episodes (by published_at). None = all in scope.
         episode_id: Process only this episode ID. Overrides other filters if set.
         replace_existing: If True, replace existing vocabulary for each episode.
         incremental: If True (default), only process episodes that have no vocabulary yet.

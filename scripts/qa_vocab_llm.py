@@ -89,13 +89,13 @@ def _build_prompt(words: list[dict]) -> str:
             lines.append(f'   Example: "{w["example"]}"')
 
     word_block = "\n".join(lines)
-    return f"""You are a Dutch-English dictionary assistant reviewing vocabulary entries for a language-learning app.  # noqa: E501
+    return f"""You are a Dutch-English dictionary assistant reviewing vocabulary entries for a language-learning app.
 
 For each word below:
-1. Check if the existing translation is a correct, natural English dictionary definition for the lemma.  # noqa: E501
-   Only correct it when the existing translation is clearly wrong (e.g. in Dutch, gibberish, or factually incorrect).  # noqa: E501
-   Output null if the translation is already reasonable - even if you'd phrase it slightly differently.  # noqa: E501
-2. Check if this word is part of a fixed Dutch multi-word expression or idiom (e.g. "ten slotte", "zorgen voor").  # noqa: E501
+1. Check if the existing translation is a correct, natural English dictionary definition for the lemma.
+   Only correct it when the existing translation is clearly wrong (e.g. in Dutch, gibberish, or factually incorrect).
+   Output null if the translation is already reasonable - even if you'd phrase it slightly differently.
+2. Check if this word is part of a fixed Dutch multi-word expression or idiom (e.g. "ten slotte", "zorgen voor").
    Output null if it is not part of one.
 
 Rules:
@@ -110,8 +110,8 @@ Rules:
 Output a JSON array with one object per word, in the same order.
 Schema for each object:
   "corrected_pos":         null  (always null - do not change POS tags)
-  "corrected_translation": string or null  (only when clearly wrong - English only, dictionary base form)  # noqa: E501
-  "mwe_note":              string or null  (e.g. "part of 'ten slotte' (finally)" - null if not an MWE)  # noqa: E501
+  "corrected_translation": string or null  (only when clearly wrong - English only, dictionary base form)
+  "mwe_note":              string or null  (e.g. "part of 'ten slotte' (finally)" - null if not an MWE)
 
 Output ONLY the JSON array. No markdown, no explanations.
 
@@ -273,20 +273,13 @@ def main():
         help="Max words to process in one run (default: 200)",
     )
     parser.add_argument(
-        "--episode-id",
-        type=int,
-        metavar="ID",
-        help="Only check words from this episode",
+        "--episode-id", type=int, metavar="ID", help="Only check words from this episode"
     )
     parser.add_argument(
-        "--model",
-        default=DEFAULT_MODEL,
-        help=f"OpenAI model to use (default: {DEFAULT_MODEL})",
+        "--model", default=DEFAULT_MODEL, help=f"OpenAI model to use (default: {DEFAULT_MODEL})"
     )
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be checked, no changes saved",
+        "--dry-run", action="store_true", help="Show what would be checked, no changes saved"
     )
     parser.add_argument("--db", default=None, help="Database URL (default: DATABASE_URL env var)")
     args = parser.parse_args()
@@ -358,7 +351,7 @@ def main():
             if translation_changed:
                 corrected_translation += 1
                 print(
-                    f'    Translation fix: {word["lemma"]} "{word["translation"]}" -> "{vocab_item.qa_translation}"'  # noqa: E501
+                    f"    Translation fix: {word['lemma']} \"{word['translation']}\" -> \"{vocab_item.qa_translation}\""
                 )
             if mwe_flagged_item:
                 flagged_mwe += 1
