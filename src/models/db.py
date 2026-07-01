@@ -10,6 +10,7 @@ import os
 import sqlite3
 from datetime import datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from sqlalchemy import (
@@ -91,6 +92,10 @@ class Episode(Base):
 
     # Related articles JSON: [{"topic": "...", "title": "...", "url": "...", "snippet": "..."}, ...]
     related_articles = Column(Text)
+
+    # Semantic search embedding (text-embedding-3-small, 1536 dims). Postgres-only;
+    # becomes a plain TEXT column on SQLite so local dev/tests can still create_all().
+    embedding = Column(Vector(1536).with_variant(Text(), "sqlite"), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

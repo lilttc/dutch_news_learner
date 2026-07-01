@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from src.models import Episode, EpisodeVocabulary, UserVocabulary
+from src.rag import answer_question, search_episodes
 
 from ..deps import get_db, get_dictionary
 from ..session import get_user_id
@@ -57,6 +58,25 @@ class ArticleOut(BaseModel):
     title: str
     url: str
     snippet: str = ""
+
+
+class EpisodeSearchResult(BaseModel):
+    id: int
+    video_id: str
+    title: str
+    published_at: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class AskRequest(BaseModel):
+    question: str
+
+
+class AskResponse(BaseModel):
+    answer: str
+    episodes: list[EpisodeSearchResult]
 
 
 class EpisodeDetailOut(BaseModel):
@@ -111,6 +131,40 @@ def list_episodes(
         )
         for ep, count in rows
     ]
+
+
+def _to_search_result(ep: Episode) -> EpisodeSearchResult:
+    return EpisodeSearchResult(
+        id=ep.id,
+        video_id=ep.video_id,
+        title=ep.title,
+        published_at=ep.published_at.isoformat() if ep.published_at else None,
+        thumbnail_url=ep.thumbnail_url,
+    )
+
+
+# Registered before /episodes/{episode_id} so "search" isn't matched as an episode_id.
+@router.get("/episodes/search", response_model=list[EpisodeSearchResult])
+def search_episodes_route(q: str, limit: int = 5, db: Session = Depends(get_db)):
+    """Semantic search over episodes (requires Postgres + pgvector + OPENAI_API_KEY)."""
+    try:
+        episodes = search_episodes(db, q, limit=limit)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    return [_to_search_result(ep) for ep in episodes]
+
+
+@router.post("/episodes/ask", response_model=AskResponse)
+def ask_episodes_route(body: AskRequest, db: Session = Depends(get_db)):
+    """RAG: answer a question using the most relevant episodes as context."""
+    try:
+        result = answer_question(db, body.question)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    return AskResponse(
+        answer=result["answer"],
+        episodes=[_to_search_result(ep) for ep in result["episodes"]],
+    )
 
 
 @router.get("/episodes/{episode_id}", response_model=EpisodeDetailOut)

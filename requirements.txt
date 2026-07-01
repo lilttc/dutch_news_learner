@@ -9,6 +9,7 @@ python-dotenv>=1.0.0
 # Database
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0  # Postgres driver (Neon)
+pgvector>=0.3.0  # Episode.embedding column (semantic search)
 
 # NLP (Phase 2)
 spacy>=3.7.0

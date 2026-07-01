@@ -10,7 +10,7 @@ The project begins as a personal learning tool and is designed to evolve into a 
 
 - **Streamlit is the primary public app today.** It is live on Streamlit Community Cloud and is the main learning experience for users.
 - **Next.js + FastAPI exist as a secondary/demo frontend stack.** This path is implemented but currently not the main product while the Streamlit app is active.
-- **Pipeline and database:** Neon Postgres is the source of truth, and the daily pipeline is mainly run from WSL cron due to YouTube transcript IP restrictions from datacenter hosts.
+- **Pipeline and database:** Neon Postgres is the source of truth. The daily pipeline (`scripts/run_pipeline.sh`) runs via CLI, scheduled with Windows Task Scheduler, on the owner's PC — a residential IP is required since YouTube blocks transcript fetching from datacenter hosts.
 - **Low-cost operation:** Local SQLite is used for dictionary lookups, OpenAI enrichment is optional, and deployments are kept lightweight by design.
 
 ---
@@ -44,17 +44,17 @@ The goal is to help learners acquire real-world Dutch vocabulary through repeate
 
 The homepage displays the latest news episode and acts as the main learning entrypoint.
 
-- Embedded YouTube video
-- Subtitle transcript with clickable timestamps (seeks video in-page)
+- Click-to-watch video card (links out to YouTube — NOS disables third-party embedding)
+- Subtitle transcript with clickable timestamps (opens the video on YouTube at that time)
 - Clickable vocabulary with definition pop-ups
 - Extracted vocabulary list with status tracking
 
-**Learning flow:** Open today's episode → watch video → read subtitles → click unknown words → save vocabulary → take daily quiz
+**Learning flow:** Open today's episode → read subtitles (watch the video on YouTube alongside) → click unknown words → save vocabulary → take daily quiz
 
 ### Subtitle-Driven Learning
 
-- Sentence-level subtitle display
-- Clickable timestamps seek the embedded video (no new tab)
+- Sentence-level subtitle display (merges fragmented auto-captions into full sentences)
+- Clickable timestamps open the video on YouTube at that point
 - Clickable vocabulary inside subtitles (click-to-show definition bubble)
 - Optional English translations per segment (LLM-generated, toggle show/hide)
 
@@ -104,6 +104,10 @@ Episodes indexed by date with calendar-style browsing to revisit older episodes 
 
 For each episode, topic keywords are extracted (LLM) and linked to NOS articles via DuckDuckGo search. Results are filtered to ±7 days around the episode date for relevance.
 
+### Ask the News (Semantic Search + RAG)
+
+Episodes are embedded (`text-embedding-3-small`, pgvector) so you can ask a question in plain language and get an answer grounded in the most relevant episodes, with citations back to the specific episode(s) used. Requires Postgres + pgvector — unavailable on the local SQLite dev fallback.
+
 ### Non-Goals (v1)
 
 To keep the project focused, v1 intentionally avoids:
@@ -123,12 +127,13 @@ To keep the project focused, v1 intentionally avoids:
 | Layer | Technology |
 |-------|------------|
 | Backend | Python 3.11+, FastAPI |
-| Database | PostgreSQL (Neon) + SQLite (dictionary) |
+| Database | PostgreSQL (Neon) + pgvector + SQLite (dictionary) |
 | NLP | spaCy (nl_core_news_md), separable verb recombination |
 | Dictionary | Wiktionary NL + EN editions (POS-aware, SQLite) |
-| LLM | OpenAI GPT-4o-mini (segment translation, topic extraction, vocab gap-fill) + GPT-4o (vocab QA) |
+| LLM | OpenAI GPT-4o-mini (segment translation, topic extraction, vocab gap-fill) + GPT-4o (vocab QA, RAG answers) |
+| Embeddings | OpenAI text-embedding-3-small (semantic episode search) |
 | Ingestion | youtube-transcript-api, YouTube Data API v3 |
-| Search | DuckDuckGo (related NOS articles) |
+| Search | DuckDuckGo (related NOS articles), pgvector (semantic episode search) |
 | Frontend (primary) | Streamlit |
 | Frontend (staging) | Next.js + TypeScript + Tailwind CSS |
 
@@ -172,13 +177,14 @@ dutch_news_learner/
 │   │   └── lookup.py                   # DictionaryLookup (POS-aware, EN glosses)
 │   ├── models/                         # SQLAlchemy models
 │   │   └── db.py                       # Episode, SubtitleSegment, VocabularyItem, etc.
+│   ├── rag.py                          # Shared semantic search + RAG logic (search, answer_question)
 │   └── api/                            # FastAPI REST API
 │       ├── main.py                     # App + CORS
 │       ├── deps.py                     # DB engine singleton
 │       └── routes/                     # episodes, vocabulary endpoints
 │
 ├── scripts/
-│   ├── run_pipeline.sh                 # Daily pipeline (8 steps, one command)
+│   ├── run_pipeline.sh                 # Daily pipeline (9 steps, one command)
 │   ├── ingest_playlist.py              # Ingest NOS episodes from YouTube
 │   ├── extract_vocabulary.py           # spaCy NLP + separable verb detection
 │   ├── enrich_vocabulary.py            # Dictionary-based translation fill
@@ -187,6 +193,8 @@ dutch_news_learner/
 │   ├── extract_topics.py              # Topic extraction (OpenAI)
 │   ├── qa_vocab_llm.py                 # LLM-as-judge vocab QA (GPT-4o)
 │   ├── fetch_related_articles.py       # DuckDuckGo NOS article search
+│   ├── embed_episodes.py               # Embed episodes for semantic search (OpenAI + pgvector)
+│   ├── run_eval.py                     # Retrieval evaluation against a hand-labeled Q&A set
 │   ├── download_dictionary.py          # NL Wiktionary download
 │   ├── download_dictionary_en.py       # EN Wiktionary Dutch entries
 │   ├── convert_dictionary_to_sqlite.py # JSON → SQLite dictionary conversion
@@ -268,6 +276,33 @@ pytest tests
 
 ---
 
+## Pipeline Scheduling
+
+The daily pipeline (`scripts/run_pipeline.sh`) is a plain CLI script — run it by
+hand, or schedule it. It needs a residential/home IP (YouTube blocks transcript
+fetching from datacenter IPs), so it runs on the owner's PC rather than a cloud
+scheduler.
+
+### Running manually
+
+```bash
+bash scripts/run_pipeline.sh            # Incremental (only new/missing data)
+```
+
+### Scheduling via Windows Task Scheduler (WSL)
+
+1. Open **Task Scheduler** → **Create Basic Task**
+2. Trigger: **Daily**, weekdays, at the desired time (e.g. 18:00)
+3. Action: **Start a program**
+   - Program/script: `wsl.exe`
+   - Arguments: `bash -lc "cd /home/tchen/dutch_news_learner && bash scripts/run_pipeline.sh >> logs/pipeline.log 2>&1"`
+4. Under **Conditions**, uncheck "Start the task only if the computer is on AC power"
+   if running on a laptop, so it still fires on battery
+5. Save, then test with **Run** in Task Scheduler to confirm it completes and
+   `logs/pipeline.log` is updated
+
+---
+
 ## Development Roadmap
 
 | Phase | Focus | Status |
@@ -278,20 +313,19 @@ pytest tests
 | **3.5** | Related reading (topic extraction, date-filtered NOS links) | ✅ Done |
 | **4** | Next.js + FastAPI migration, deployment (Vercel + Render + Streamlit Cloud) | ✅ Done |
 | **5A** | Vocabulary quality (LLM enrichment, separable verb detection, QA agent) | ✅ Done |
-| **5B** | Video-transcript UX (in-page timestamp seeking) | ✅ Done |
+| **5B** | Video-transcript UX (click-to-watch card + timestamp deep links; NOS disabled third-party embedding) | ✅ Done |
 | **6A** | PostgreSQL (Neon) + cloud migration | ✅ Done |
-| **6B** | Daily pipeline (WSL cron - GitHub Actions blocked by YouTube IP restrictions) | ✅ Done |
+| **6B** | Daily pipeline (CLI + Windows Task Scheduler) | ✅ Done |
 | **6C** | User auth + proper hosting | Planned |
-| **Next** | Shadowing mode (auto-pause per sentence for speaking practice) | Up next |
-| **Next** | Semantic episode search (pgvector) | Up next |
+| **7** | Semantic episode search + RAG ("Ask the news", pgvector + GPT-4o) | In progress |
+| **Next** | Shadowing mode (auto-pause per sentence for speaking practice) | Needs redesign — assumed in-page video control, no longer possible now that embedding is disabled |
 | **Next** | Quiz system (translation multiple choice, spaced repetition) | Planned |
-| **7** | AI features (RAG search, AI explanations) | Future |
 
 ---
 
 ## Copyright & Content Strategy
 
-Videos are embedded from YouTube and remain hosted on the original platform. The application stores only:
+Videos remain hosted on YouTube; the app links out to watch them there (NOS disables third-party embedding). The application stores only:
 
 - Metadata
 - Processed vocabulary

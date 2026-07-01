@@ -1,0 +1,53 @@
+[
+  {
+    "note": "TEMPLATE - replace with a real question grounded in one of your ingested episodes. Run `python scripts/query_db.py` or check the Streamlit episode list for real titles/video_ids to build these from. scripts/run_eval.py refuses to run while any question still starts with REPLACE_ME.",
+    "question": "REPLACE_ME 1: e.g. 'What did the government decide about nitrogen/stikstof rules?'",
+    "expected_video_id": "REPLACE_ME_video_id",
+    "expected_title_contains": "REPLACE_ME keyword expected in the matching episode's title"
+  },
+  {
+    "question": "REPLACE_ME 2",
+    "expected_video_id": "",
+    "expected_title_contains": ""
+  },
+  {
+    "question": "REPLACE_ME 3",
+    "expected_video_id": "",
+    "expected_title_contains": ""
+  },
+  {
+    "question": "REPLACE_ME 4",
+    "expected_video_id": "",
+    "expected_title_contains": ""
+  },
+  {
+    "question": "REPLACE_ME 5",
+    "expected_video_id": "",
+    "expected_title_contains": ""
+  },
+  {
+    "question": "REPLACE_ME 6",
+    "expected_video_id": "",
+    "expected_title_contains": ""
+  },
+  {
+    "question": "REPLACE_ME 7",
+    "expected_video_id": "",
+    "expected_title_contains": ""
+  },
+  {
+    "question": "REPLACE_ME 8",
+    "expected_video_id": "",
+    "expected_title_contains": ""
+  },
+  {
+    "question": "REPLACE_ME 9",
+    "expected_video_id": "",
+    "expected_title_contains": ""
+  },
+  {
+    "question": "REPLACE_ME 10",
+    "expected_video_id": "",
+    "expected_title_contains": ""
+  }
+]

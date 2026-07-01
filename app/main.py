@@ -30,6 +30,7 @@ from src.api.auth import hash_password, verify_password
 from src.api.routes.vocabulary import USER_SENTENCE_MAX_LEN
 from src.api.session import get_or_create_session
 from src.dictionary import get_lookup
+from src.rag import answer_question, is_semantic_search_available
 from src.vocab_export import (
     DEFAULT_EXPORT_COLUMNS,
     EXPORT_COLUMN_LABELS,
@@ -350,6 +351,14 @@ def format_timestamp(seconds):
 
 
 _SENTENCE_ENDERS = re.compile(r"[.!?]$")
+_ELLIPSIS = re.compile(r"(\.\.\.|…)$")
+
+
+def _is_sentence_end(text: str) -> bool:
+    """True if text ends a sentence. A trailing ellipsis is a continuation, not an end."""
+    if _ELLIPSIS.search(text):
+        return False
+    return bool(_SENTENCE_ENDERS.search(text))
 
 
 def merge_segments_into_sentences(segments):
@@ -378,7 +387,7 @@ def merge_segments_into_sentences(segments):
         tr = getattr(seg, "translation_en", None) or ""
         buf_translations.append(tr)
 
-        if _SENTENCE_ENDERS.search(text):
+        if _is_sentence_end(text):
             merged.append(
                 {
                     "start_time": buf_start,
@@ -403,13 +412,42 @@ def merge_segments_into_sentences(segments):
     return merged
 
 
-def render_video(video_id):
-    """Embed YouTube video with JS API enabled for in-page seeking."""
+def _split_long_sentence(text: str, max_len: int = 110) -> list[str]:
+    """
+    Split a long sentence into clause-level sub-lines for display (comma boundaries).
+
+    Returns [text] unchanged if it's already short enough to read as one line.
+    """
+    if len(text) <= max_len:
+        return [text]
+    parts = [p.strip() for p in text.split(",")]
+    lines = []
+    current = ""
+    for i, part in enumerate(parts):
+        piece = part if i == len(parts) - 1 else part + ","
+        if current and len(current) + 1 + len(piece) > max_len:
+            lines.append(current)
+            current = piece
+        else:
+            current = f"{current} {piece}".strip()
+    if current:
+        lines.append(current)
+    return lines or [text]
+
+
+def render_video(video_id, thumbnail_url=None, title=None):
+    """Show a click-to-watch card linking to YouTube (NOS disables third-party embedding)."""
+    watch_url = f"https://www.youtube.com/watch?v={video_id}"
+    thumb = thumbnail_url or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+    caption = f"Watch on YouTube — {title}" if title else "Watch on YouTube"
     st.markdown(
-        f'<iframe id="yt-player" width="100%" height="400" '
-        f'src="https://www.youtube.com/embed/{video_id}?enablejsapi=1" '
-        f'frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" '
-        f"allowfullscreen></iframe>",
+        f'<a href="{watch_url}" target="_blank" rel="noopener" '
+        f'style="display:block;position:relative;text-decoration:none;">'
+        f'<img src="{thumb}" style="width:100%;border-radius:8px;display:block;">'
+        f'<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">'
+        f'<div style="background:rgba(0,0,0,.6);color:#fff;border-radius:50%;width:64px;height:64px;'
+        f'display:flex;align-items:center;justify-content:center;font-size:28px;">▶</div></div></a>'
+        f'<div style="margin-top:6px;font-size:13px;color:#666;">▶ {caption}</div>',
         unsafe_allow_html=True,
     )
 
@@ -536,37 +574,38 @@ def _transcript_html(segments, video_id, word_to_lemma, vocab_data):
     for sent in merged:
         ts = format_timestamp(sent["start_time"])
         yt_url = f"https://www.youtube.com/watch?v={video_id}&t={int(sent['start_time'])}s"
-        text = sent["text"]
+        sub_texts = _split_long_sentence(sent["text"])
+
+        def replace_word(match):
+            before, core, after = match.group(1), match.group(2), match.group(3)
+            core_lower = core.lower()
+            if core_lower in word_to_lemma:
+                lemma = word_to_lemma[core_lower]
+                lemma_attr = lemma.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
+                word_attr = (
+                    core_lower.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
+                )
+                tip = (
+                    _tooltip_text(lemma)
+                    .replace("&", "&amp;")
+                    .replace('"', "&quot;")
+                    .replace("<", "&lt;")
+                )
+                tip_attr = f' data-tooltip="{tip}"' if tip else ""
+                return f'{before}<span class="dnl-vocab-word" data-lemma="{lemma_attr}" data-word="{word_attr}"{tip_attr}>{core}</span>{after}'
+            return match.group(0)
+
         if word_to_lemma:
+            sub_texts = [re.sub(r"(\W*)(\w+)(\W*)", replace_word, t) for t in sub_texts]
 
-            def replace_word(match):
-                before, core, after = match.group(1), match.group(2), match.group(3)
-                core_lower = core.lower()
-                if core_lower in word_to_lemma:
-                    lemma = word_to_lemma[core_lower]
-                    lemma_attr = (
-                        lemma.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
-                    )
-                    word_attr = (
-                        core_lower.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
-                    )
-                    tip = (
-                        _tooltip_text(lemma)
-                        .replace("&", "&amp;")
-                        .replace('"', "&quot;")
-                        .replace("<", "&lt;")
-                    )
-                    tip_attr = f' data-tooltip="{tip}"' if tip else ""
-                    return f'{before}<span class="dnl-vocab-word" data-lemma="{lemma_attr}" data-word="{word_attr}"{tip_attr}>{core}</span>{after}'
-                return match.group(0)
-
-            text = re.sub(r"(\W*)(\w+)(\W*)", replace_word, text)
         line_html = (
             f'<div class="dnl-transcript-line">'
             f'<span class="dnl-transcript-ts">'
             f'<a href="#" class="ts-link" data-time="{sent["start_time"]}" data-url="{yt_url}">{ts}</a>'
-            f'</span> {text}'
+            f"</span> {sub_texts[0]}"
         )
+        for extra in sub_texts[1:]:
+            line_html += f'<div class="dnl-transcript-subline">{extra}</div>'
         if sent["translation_en"]:
             line_html += f'<div class="dnl-transcript-en" style="display:none">{sent["translation_en"]}</div>'
         line_html += "</div>"
@@ -587,6 +626,7 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
   pointer-events:none; box-shadow:0 2px 8px rgba(0,0,0,.25);
 }}
 .dnl-transcript-line {{ margin-bottom:14px; }}
+.dnl-transcript-subline {{ margin-left:48px; }}
 .dnl-transcript-ts {{ font-weight:bold; }}
 .dnl-transcript-ts a {{ color:inherit; cursor:pointer; text-decoration:none; }}
 .dnl-transcript-ts a:hover {{ text-decoration:underline; }}
@@ -676,18 +716,6 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
     overlay.style.display = 'block';
   }}
 
-  function seekVideo(seconds) {{
-    try {{
-      var f = window.parent.document.getElementById('yt-player');
-      if (f && f.contentWindow) {{
-        f.contentWindow.postMessage(JSON.stringify({{event:'command',func:'seekTo',args:[seconds,true]}}),'*');
-        f.contentWindow.postMessage(JSON.stringify({{event:'command',func:'playVideo',args:[]}}),'*');
-        return true;
-      }}
-    }} catch(e) {{}}
-    return false;
-  }}
-
   document.getElementById('dnl-show-translation').addEventListener('change', function() {{
     var show = this.checked;
     document.querySelectorAll('.dnl-transcript-en').forEach(function(el) {{
@@ -697,7 +725,7 @@ body {{ font-family:system-ui,sans-serif; font-size:15px; line-height:1.6; margi
 
   document.addEventListener('click', function(ev) {{
     var ts = ev.target.closest('.ts-link');
-    if (ts) {{ ev.preventDefault(); if (!seekVideo(parseFloat(ts.getAttribute('data-time')))) window.open(ts.getAttribute('data-url'),'_blank'); return; }}
+    if (ts) {{ ev.preventDefault(); window.open(ts.getAttribute('data-url'),'_blank'); return; }}
     var w = ev.target.closest('.dnl-vocab-word');
     if (w) {{ ev.preventDefault(); ev.stopPropagation(); showBubble(w.getAttribute('data-lemma'), w.getAttribute('data-word')||w.getAttribute('data-lemma'), ev); }}
   }});
@@ -712,7 +740,10 @@ def render_transcript(segments, video_id, word_to_lemma=None, vocab_data=None):
         for sent in merged:
             ts = format_timestamp(sent["start_time"])
             yt_url = f"https://www.youtube.com/watch?v={video_id}&t={int(sent['start_time'])}s"
-            st.markdown(f"**[{ts}]({yt_url})** {sent['text']}")
+            sub_texts = _split_long_sentence(sent["text"])
+            st.markdown(f"**[{ts}]({yt_url})** {sub_texts[0]}")
+            for extra in sub_texts[1:]:
+                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;{extra}")
             if sent["translation_en"]:
                 st.caption(sent["translation_en"])
             st.markdown("")
@@ -1533,7 +1564,7 @@ def _render_episode_detail_fragment(user_id: int) -> None:
                 args=(eid, user_id),
             )
 
-        render_video(episode.video_id)
+        render_video(episode.video_id, episode.thumbnail_url, episode.title)
 
         tab_transcript, tab_vocabulary, tab_reading = st.tabs(
             [
@@ -1571,13 +1602,17 @@ def _render_main_nav_and_content() -> None:
 
     nav = st.radio(
         "Navigate",
-        ["Episodes", "My vocabulary"],
+        ["Episodes", "My vocabulary", "Ask the news"],
         horizontal=True,
         key="main_nav",
     )
 
     if nav == "My vocabulary":
         _render_my_vocabulary_page_from_fragment(user_id)
+        return
+
+    if nav == "Ask the news":
+        _render_ask_the_news_page_from_fragment()
         return
 
     # Support strip only on Episodes (compact; keeps My vocabulary and video higher)
@@ -1652,6 +1687,48 @@ def _render_my_vocabulary_page_from_fragment(user_id: int) -> None:
         _render_my_vocabulary_page(mv_session, user_id)
     finally:
         mv_session.close()
+
+
+def _render_ask_the_news_page(session) -> None:
+    """'Ask the news' — semantic search + RAG over episode transcripts."""
+    st.subheader("💬 Ask the news")
+    st.caption(
+        "Ask a question about recent episodes. The answer cites the specific "
+        "episodes it used, so you can go check them yourself."
+    )
+
+    if not is_semantic_search_available(session):
+        st.info(
+            "Semantic search needs a Postgres database with pgvector "
+            "(not available on the local SQLite fallback used in dev)."
+        )
+        return
+
+    question = st.text_input(
+        "Your question", key="ask_news_question", placeholder="e.g. What's happening with stikstof?"
+    )
+    if st.button("Ask", key="ask_news_submit") and question.strip():
+        with st.spinner("Searching episodes..."):
+            try:
+                result = answer_question(session, question.strip())
+            except RuntimeError as e:
+                st.error(str(e))
+                return
+        st.markdown(result["answer"])
+        if result["episodes"]:
+            st.markdown("**Sources:**")
+            for ep in result["episodes"]:
+                date = ep.published_at.strftime("%Y-%m-%d") if ep.published_at else "?"
+                st.markdown(f"- [{date} — {ep.title}](?episode={ep.id})")
+
+
+def _render_ask_the_news_page_from_fragment() -> None:
+    """Open a DB session for Ask the news (fragment reruns may not run main())."""
+    ask_session = get_db_session()
+    try:
+        _render_ask_the_news_page(ask_session)
+    finally:
+        ask_session.close()
 
 
 def main():
