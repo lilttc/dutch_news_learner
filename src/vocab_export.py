@@ -21,6 +21,11 @@ from src.models import (
     VocabularyItem,
 )
 
+# Max length of a learner-written note (`UserVocabulary.user_sentence`). Enforced by
+# the API's Pydantic model and mirrored by the Streamlit note field; kept here so
+# both surfaces share one value without the Streamlit app importing the FastAPI route.
+USER_SENTENCE_MAX_LEN = 2000
+
 EXPORT_COLUMN_KEYS = frozenset(
     {
         "vocabulary_id",

@@ -10,11 +10,22 @@ from datetime import datetime, timedelta, timezone
 from fastapi import Depends, HTTPException, Request
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
-from werkzeug.security import check_password_hash, generate_password_hash
 
 from src.models import User
+from src.passwords import hash_password, verify_password  # re-exported for the API layer
 
 from .deps import get_db
+
+__all__ = [
+    "hash_password",
+    "verify_password",
+    "get_secret_key",
+    "ensure_jwt_configured",
+    "create_access_token",
+    "decode_token",
+    "get_current_user",
+    "get_current_user_optional",
+]
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
@@ -54,19 +65,6 @@ def get_secret_key() -> str:
 def ensure_jwt_configured() -> None:
     """Fail fast at API startup if JWT signing is misconfigured."""
     get_secret_key()
-
-
-def hash_password(password: str) -> str:
-    """
-    Hash password with PBKDF2-SHA256 (Werkzeug). Avoids bcrypt/passlib conflicts
-    some environments have when `import bcrypt` resolves incorrectly.
-    """
-    return generate_password_hash(password, method="pbkdf2:sha256")
-
-
-def verify_password(plain: str, hashed: str) -> bool:
-    """Verify PBKDF2-SHA256 hash (Werkzeug format)."""
-    return check_password_hash(hashed, plain)
 
 
 def create_access_token(user_id: int, email: str) -> str:

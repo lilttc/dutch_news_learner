@@ -12,17 +12,32 @@ columns (see scripts/embed_episodes.py) - it is unavailable on the SQLite dev
 fallback, which stores embedding as plain TEXT.
 """
 
-import os
+# Load-bearing: `OpenAI` is a TYPE_CHECKING-only import below, so the annotations
+# in this module must stay lazy (strings). Don't remove this line.
+from __future__ import annotations
 
-from openai import OpenAI
+import os
+from typing import TYPE_CHECKING
 
 from src.models import Episode, SubtitleSegment
+
+if TYPE_CHECKING:
+    from openai import OpenAI
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 ANSWER_MODEL = "gpt-4o"
 
 
 def get_client() -> OpenAI:
+    """
+    Build an OpenAI client from ``OPENAI_API_KEY``.
+
+    ``openai`` (and its Pydantic dependency) is imported lazily here so that
+    merely importing this module - which the Streamlit app does on every page
+    load for ``is_semantic_search_available`` - stays cheap and framework-light.
+    """
+    from openai import OpenAI
+
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY not set. Add it to .env")

@@ -11,6 +11,7 @@ from src.dictionary.lookup import DictionaryLookup
 from src.models import UserVocabulary, VocabularyItem
 from src.vocab_export import (
     DEFAULT_EXPORT_COLUMNS,
+    USER_SENTENCE_MAX_LEN,  # re-exported: learner-note max length, shared with Streamlit
     build_anki_row,
     build_export_rows,
     export_rows_to_csv,
@@ -27,8 +28,7 @@ router = APIRouter(tags=["vocabulary"])
 
 VALID_STATUSES = {"new", "learning", "known"}
 
-# Learner-written note per word (export / Anki); empty / null stored as NULL
-USER_SENTENCE_MAX_LEN = 2000
+__all__ = ["router", "VALID_STATUSES", "USER_SENTENCE_MAX_LEN"]
 
 
 def _parse_export_columns_api(raw: str | None) -> list[str]:

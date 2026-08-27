@@ -1,56 +1,37 @@
 """
-User resolution for per-user vocabulary (Phase 6E + 6F).
+FastAPI request -> user_id resolution for per-user vocabulary (Phase 6E + 6F).
 
 Priority: Bearer token (registered user) > X-Session-Token (anonymous) > legacy (1).
 
 If the client sends a session token (header or query), it must be a valid UUID and
 the DB must succeed - we never silently map those requests onto shared legacy user_id=1.
+
+The framework-free session helpers (``get_or_create_session``,
+``create_session_token``, ``LEGACY_USER_ID``) live in ``src.user_sessions`` and are
+re-exported here.
 """
 
 import logging
 import uuid
 
 from fastapi import Depends, HTTPException, Request
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from src.models import AnonymousSession
+# get_or_create_session / create_session_token / LEGACY_USER_ID are framework-free
+# and live in src.user_sessions; re-exported here so API callers keep one import.
+from src.user_sessions import LEGACY_USER_ID, create_session_token, get_or_create_session
 
 from .auth import get_current_user_optional
 from .deps import get_db
 
-LEGACY_USER_ID = 1
+__all__ = [
+    "LEGACY_USER_ID",
+    "create_session_token",
+    "get_or_create_session",
+    "get_user_id",
+]
 
 _logger = logging.getLogger(__name__)
-
-
-def get_or_create_session(db: Session, token: str) -> int:
-    """
-    Look up or create an anonymous session by token. Returns user_id (session id).
-
-    Args:
-        db: Database session.
-        token: UUID string from localStorage (Next.js) or URL param (Streamlit).
-
-    Returns:
-        user_id: The session's id, used as user_id in UserVocabulary.
-    """
-    session = db.query(AnonymousSession).filter_by(token=token).first()
-    if session:
-        return session.id
-
-    new_session = AnonymousSession(token=token)
-    db.add(new_session)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        session = db.query(AnonymousSession).filter_by(token=token).first()
-        if session:
-            return session.id
-        raise
-    db.refresh(new_session)
-    return new_session.id
 
 
 def get_user_id(
@@ -91,8 +72,3 @@ def get_user_id(
             status_code=503,
             detail="Unable to resolve session; please try again later.",
         ) from e
-
-
-def create_session_token() -> str:
-    """Generate a new UUID v4 token for anonymous sessions."""
-    return str(uuid.uuid4())

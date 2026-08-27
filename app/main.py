@@ -26,15 +26,15 @@ load_dotenv(PROJECT_ROOT / ".env")
 import streamlit as st
 from sqlalchemy.orm import joinedload
 
-from src.api.auth import hash_password, verify_password
-from src.api.routes.vocabulary import USER_SENTENCE_MAX_LEN
-from src.api.session import get_or_create_session
 from src.dictionary import get_lookup
+from src.passwords import hash_password, verify_password
 from src.rag import answer_question, is_semantic_search_available
+from src.user_sessions import get_or_create_session
 from src.vocab_export import (
     DEFAULT_EXPORT_COLUMNS,
     EXPORT_COLUMN_LABELS,
     ORDERED_EXPORT_COLUMNS,
+    USER_SENTENCE_MAX_LEN,
     build_anki_row,
     build_export_rows,
     export_rows_to_csv,
