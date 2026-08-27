@@ -3,6 +3,10 @@ Pytest setup: isolate DB and secrets before importing the FastAPI app.
 
 ``src.api.deps`` binds ``get_engine()`` at import time, so ``DATABASE_URL`` and
 ``SECRET_KEY`` must be set before ``from src.api.main import app``.
+
+``src.api.main`` also calls ``load_dotenv()`` on import, so anything not pinned
+here leaks in from a developer's local ``.env`` - making the suite pass locally
+and fail on CI (which has no ``.env``). Pin every secret the tests touch.
 """
 
 from __future__ import annotations
@@ -18,6 +22,10 @@ _tmp_db = tempfile.NamedTemporaryFile(suffix=".pytest-dnl.db", delete=False)
 _tmp_db.close()
 os.environ["DATABASE_URL"] = f"sqlite:///{_tmp_db.name}"
 os.environ["SECRET_KEY"] = "pytest-secret-key-at-least-32-characters"
+# Deterministic dummy: tests mock every OpenAI client, but code paths that call
+# get_client() before their real precondition (e.g. answer_question) must behave
+# the same with or without a local .env.
+os.environ["OPENAI_API_KEY"] = "sk-test-not-a-real-key"
 
 from src.api.main import app  # noqa: E402
 
