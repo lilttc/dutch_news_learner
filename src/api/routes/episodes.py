@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, defer, selectinload
 
 from src.models import Episode, EpisodeVocabulary, UserVocabulary
 from src.rag import answer_question, search_episodes
@@ -180,11 +180,18 @@ def get_episode(
     Vocabulary status is per-user, resolved from X-Session-Token header.
     Without token, uses legacy shared user (user_id=1).
     """
+    # selectinload (not joinedload) for both collections: joining two sibling
+    # one-to-many relations is a segments x vocabulary cartesian product, and with
+    # Episode.embedding (vector(1536)) on every row it times out. embedding is
+    # deferred - this endpoint never returns it.
     episode = (
         db.query(Episode)
         .options(
-            joinedload(Episode.subtitle_segments),
-            joinedload(Episode.episode_vocabulary).joinedload(EpisodeVocabulary.vocabulary_item),
+            defer(Episode.embedding),
+            selectinload(Episode.subtitle_segments),
+            selectinload(Episode.episode_vocabulary).selectinload(
+                EpisodeVocabulary.vocabulary_item
+            ),
         )
         .filter(Episode.id == episode_id)
         .first()

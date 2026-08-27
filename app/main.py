@@ -24,7 +24,8 @@ from dotenv import load_dotenv
 load_dotenv(PROJECT_ROOT / ".env")
 
 import streamlit as st
-from sqlalchemy.orm import joinedload
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import defer, selectinload
 
 from src.dictionary import get_lookup
 from src.passwords import hash_password, verify_password
@@ -163,12 +164,24 @@ def get_db_session():
 
 
 def load_episode_with_data(session, episode_id):
-    """Load one episode with subtitles and vocabulary."""
+    """
+    Load one episode with its subtitle segments and vocabulary eagerly attached.
+
+    Uses selectinload (separate IN queries), not joined eager loading, for both
+    collections. Joining two sibling one-to-many relations produces a
+    segments x vocabulary cartesian product; with ``Episode.embedding``
+    (vector(1536)) repeated across every row that is hundreds of MB and times
+    out on Postgres. ``embedding`` is deferred here - the learning UI never
+    reads it (it exists only for semantic search in ``src/rag.py``).
+    """
     return (
         session.query(Episode)
         .options(
-            joinedload(Episode.subtitle_segments),
-            joinedload(Episode.episode_vocabulary).joinedload(EpisodeVocabulary.vocabulary_item),
+            defer(Episode.embedding),
+            selectinload(Episode.subtitle_segments),
+            selectinload(Episode.episode_vocabulary).selectinload(
+                EpisodeVocabulary.vocabulary_item
+            ),
         )
         .filter(Episode.id == episode_id)
         .first()
@@ -1746,7 +1759,12 @@ def main():
 
         _render_main_nav_and_content()
     finally:
-        session.close()
+        # A Neon connection dropped mid-request (scale-to-zero, idle timeout)
+        # makes close() raise on the rollback; don't let cleanup mask the real error.
+        try:
+            session.close()
+        except SQLAlchemyError:
+            pass
 
 
 if __name__ == "__main__":
