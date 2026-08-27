@@ -16,7 +16,7 @@ This document describes the system architecture, data flow, and design decisions
 │   │              │     │              │     │                          │   │
 │   │ YouTube API  │     │ Tokenization │     │  PostgreSQL (Neon)       │   │
 │   │ Transcripts  │     │ Lemmatization│     │  Episodes, Vocabulary,   │   │
-│   │              │     │ Frequency    │     │  User Progress, Quizzes   │   │
+│   │              │     │ POS tagging  │     │  User Vocabulary Status   │   │
 │   └──────────────┘     └──────────────┘     └────────────┬─────────────┘   │
 │                                                          │                  │
 │                                                          ▼                  │
@@ -247,7 +247,9 @@ Episode (title, description, transcript)
                            │ user_answer         │
                            │ is_correct          │
                            └─────────────────────┘
-  (QuizSession + QuizItem are designed but not yet implemented)
+  (QuizSession + QuizItem: PLANNED — not in src/models/db.py, no quiz code exists yet.
+   UserVocabulary today has only: id, user_id, vocabulary_id, status, user_sentence,
+   created_at, updated_at.)
 ```
 
 ### 3.2 Table Definitions
@@ -256,11 +258,10 @@ Episode (title, description, transcript)
 |-------|---------|
 | **Episode** | One news video. Stores YouTube metadata, summary, publish date, topics (pipe-separated for Related reading), `source` (which channel — one today, multi-channel planned), and `embeddable` (whether the video allows in-page playback). |
 | **SubtitleSegment** | One subtitle line. Text, start/end timestamps, optional translation_en (LLM), links to episode. |
-| **VocabularyItem** | Master vocabulary. Lemma, POS, translation, frequency rank, CEFR. QA fields (qa_translation, qa_pos, qa_note, qa_checked) store LLM-reviewed corrections; display layer prefers these over originals. |
+| **VocabularyItem** | Master vocabulary. Lemma, POS, translation. QA fields (qa_translation, qa_pos, qa_note, qa_checked) store LLM-reviewed corrections; display layer prefers these over originals. `frequency_rank` and `cefr_level` columns exist but are **not yet populated** (planned — SUBTLEX-NL). |
 | **EpisodeVocabulary** | Junction: which words appear in which episode, with counts and examples. |
-| **UserVocabulary** | User's relationship to each word: status, review dates, quiz performance. |
-| **QuizSession** | One quiz attempt. Date, score, duration. |
-| **QuizItem** | One question in a quiz. Vocabulary, answer, correctness. |
+| **UserVocabulary** | User's relationship to each word: status (new / learning / known) and an optional learner note. Review dates and quiz performance are **planned, not implemented**. |
+| **QuizSession** / **QuizItem** | **Planned — not implemented.** Shown here as the intended design; there are no such tables in `src/models/db.py` and no quiz code exists yet. |
 
 ### 3.3 User Vocabulary Status
 
@@ -269,13 +270,16 @@ Episode (title, description, transcript)
 | `new` | Just seen, not yet saved |
 | `learning` | Saved, in review queue |
 | `known` | User marked as known |
-| `ignored` | User chose to ignore |
+| `ignored` | User chose to ignore — **documented but not accepted by the API**: `VALID_STATUSES` in `src/api/routes/vocabulary.py` is `{new, learning, known}` only. Open decision: implement it or drop it. |
 
 ---
 
 ## 4. Learning Pipeline
 
 ### 4.1 Daily Learning Flow
+
+**Steps 1–2 are implemented. Steps 3–4 (quiz + review tracking) are planned — see the
+roadmap.** Today, review happens via CSV/Anki export, not in-app.
 
 ```
 User opens app
@@ -295,7 +299,7 @@ User opens app
 │ 2. User clicks word → modal with translation, example, status    │
 │    - "Save to vocabulary" → UserVocabulary.status = 'learning'   │
 │    - "I know this" → UserVocabulary.status = 'known'             │
-│    - "Ignore" → UserVocabulary.status = 'ignored'                 │
+│    (no 'ignored' status — the API accepts new/learning/known only)│
 └─────────────────────────────────────────────────────────────────┘
       │
       ▼
@@ -315,7 +319,9 @@ User opens app
 
 ### 4.2 Quiz Question Generation
 
-**Phase 1 (MVP):** Template-based, no LLM
+**Planned — not implemented.** The quiz itself does not exist yet (see 3.2). This is the
+intended template-based design; it needs `frequency_rank` populated (also planned) for the
+"similar frequency" distractor rule.
 
 ```
 For each vocabulary item in quiz pool:
@@ -327,17 +333,19 @@ For each vocabulary item in quiz pool:
   4. Store question + correct index
 ```
 
-**Phase 2 (Future):** Add cloze deletion, context-based questions, optional LLM generation.
+Later: cloze deletion, context-based questions, optional LLM generation.
 
 ### 4.3 Vocabulary Ranking (Personalization)
 
-When displaying vocabulary, rank by:
+Intended ranking signals when displaying vocabulary. Implemented today: user status and
+recurrence/episode-frequency. CEFR filtering and quiz-performance weighting are planned
+(both depend on data not yet populated).
 
-1. **User status** - `learning` > `new` > `known` (hide `ignored`)
+1. **User status** - `learning` > `new` > `known`
 2. **Recurrence** - Higher episode count = higher priority
 3. **Episode frequency** - More appearances in this episode = more important
-4. **Difficulty** - Filter by CEFR (e.g., show A2–B2 only)
-5. **Quiz performance** - Previously incorrect = higher priority
+4. **Difficulty** *(planned)* - Filter by CEFR (e.g., show A2–B2 only)
+5. **Quiz performance** *(planned)* - Previously incorrect = higher priority
 
 ---
 
@@ -398,7 +406,9 @@ app/
 | **spaCy nl_core_news_md** | Dutch NLP (tokenize, lemmatize, POS, dep parse) | ~50MB model |
 | **Wiktionary NL + EN** | Dictionary (glosses, POS-aware) | Downloaded once, stored as SQLite |
 | **OpenAI API (GPT-4o-mini)** | Segment translation, topic extraction, vocab gap-filling | Optional but recommended |
-| **OpenAI API (GPT-4o)** | Vocabulary QA agent - reviews and corrects translations | Optional, higher quality |
+| **OpenAI API (GPT-4o)** | Vocabulary QA agent, RAG answers | Optional, higher quality |
+| **OpenAI API (text-embedding-3-small)** | Episode embeddings for semantic search | Optional; RAG needs Postgres + pgvector |
+| **pgvector** | Vector similarity for "Ask the news" | Neon extension; unavailable on the SQLite dev fallback |
 | **DuckDuckGo (ddgs)** | Related NOS article search | No key required, rate-limited with backoff |
 
 ---
@@ -413,7 +423,7 @@ app/
 - **Dictionary** - Local SQLite file (`dutch_glosses.db`, read-only)
 - **Streamlit Cloud** - Primary deployment today; auto-deploys from `main` branch. Slated for replacement — Community Cloud sleeps on inactivity and is slow under interaction.
 - **FastAPI + Next.js** - Secondary stack (suspended on Render/Vercel); the candidate to replace Streamlit as the primary frontend, pending feature-parity work
-- **Pipeline** - `run_pipeline.sh` runs via WSL cron on owner's PC (weekdays 18:00 Amsterdam)
+- **Pipeline** - `run_pipeline.sh` runs on the owner's PC (residential IP required — YouTube blocks datacenter hosts), scheduled via Windows Task Scheduler invoking WSL, weekdays 18:00 Amsterdam. Run alerting is planned.
 
 ### 7.2 Public Platform (Future)
 
@@ -436,21 +446,27 @@ app/
 | Dictionary + LLM fallback | Dictionary covers base forms cheaply; LLM fills inflected/rare words |
 | LLM-as-judge QA | GPT-4o reviews translations post-hoc; corrections in separate qa_* fields preserve audit trail |
 | Separable verb recombiner | Dep parsing + heuristic + dictionary validation avoids false positives |
-| Template quizzes first | Reliable, no LLM cost, validates core loop |
-| Frequency-based ranking | Recurring words = high-value learning targets |
+| Template quizzes first (planned) | Reliable, no LLM cost, validates core loop — not yet built |
+| Recurrence-based ranking | Recurring words = high-value learning targets (corpus-wide frequency ranking is planned, not yet wired in) |
 | Episode-level vocabulary | Granular enough for context, manageable size |
 
 ---
 
 ## 9. Future Architecture Extensions
 
+Roughly in priority order (see the README roadmap for the current sequence):
+
+- **Operational hardening** - Pipeline alerting (dead-man's-switch ping), fail-loud exit codes, and consolidating schema migration onto Alembic alone (`_migrate_schema()` still runs on every script invocation)
 - **Multi-source ingestion** - Config-driven channel list (Nieuwsuur, NCRV documentaries) with a per-source difficulty tag; `Episode.source` already exists
 - **Conditional embed** - Play the video in-page for channels that permit embedding; `Episode.embeddable` captured at ingest
-- **Frontend migration** - Move off Streamlit to a faster, always-on hosted frontend (Next.js)
-- **Spaced repetition** - Replace simple queue with SM-2 or similar
+- **Lexical data foundation** - Populate `frequency_rank` from SUBTLEX-NL; derive `cefr_level` and a per-episode difficulty score; default the vocab list to the mid-frequency "sweet spot"
+- **Frontend migration** - Move off Streamlit to a faster, always-on hosted frontend
+- **Quiz + spaced repetition** - Build the quiz (no quiz code exists today), then SM-2 scheduling over saved words
+- **Dutch lexical richness** - de/het gender, noun plurals, verb principal parts, compound splitting in the definition bubble and export
 - **Topic clustering** - Group vocabulary by news topic
-- **Shadowing mode** - Auto-pause after each sentence for speaking practice
-- **Semantic search** - pgvector episode search by topic/theme
-- **Listening mode** - Audio-only quiz, pronunciation practice
+- **Shadowing mode** - Step through sentences for speaking practice (auto-pause needs an in-page player — blocked for NOS, possible on embeddable channels)
+- **Listening mode** - Audio-only review, pronunciation practice (TTS)
 - **CEFR placement** - Estimate user level from known words
 - **Mobile** - Investigate empty page bug on Android/Streamlit
+
+**Done since this list was written:** semantic search + RAG ("Ask the news") — `Episode.embedding` (pgvector on Neon), `text-embedding-3-small` for episode + query vectors, top-k cosine retrieval, GPT-4o answers with episode citations. Shared retrieve-then-answer logic in `src/rag.py`, called by the API, Streamlit, and `scripts/run_eval.py`. Postgres-only; unavailable on the SQLite dev fallback.

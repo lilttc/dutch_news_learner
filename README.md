@@ -2,14 +2,14 @@
 
 A personal-first Dutch learning platform built from daily news videos.
 
-Dutch News Learner ingests **NOS Journaal in Makkelijke Taal** episodes from YouTube, extracts subtitles, and transforms them into a structured learning environment with personalized vocabulary tracking, recurring word detection, and daily quizzes.
+Dutch News Learner ingests **NOS Journaal in Makkelijke Taal** episodes from YouTube, extracts subtitles, and transforms them into a structured learning environment with personalized vocabulary tracking, recurring word detection, and CSV/Anki export for review. An in-app quiz with spaced repetition is planned.
 
 The project begins as a personal learning tool and is designed to evolve into a public language-learning platform.
 
 ## Current Status
 
-- **Streamlit is the primary public app today.** It is live on Streamlit Community Cloud and is the main learning experience for users. A migration to a faster, always-on hosted frontend (Next.js) is the next major piece of work — see the roadmap.
-- **Next.js + FastAPI exist as a secondary frontend stack** and are the candidate for that migration. This path is implemented but not yet at feature parity with the Streamlit app.
+- **Streamlit is the primary public app today.** It is live on Streamlit Community Cloud and is the main learning experience for users. Replacing it with a faster, always-on hosted frontend is on the roadmap (after operational hardening and some backend work).
+- **Next.js + FastAPI exist as a secondary frontend stack** and are the candidate for that migration. This path is implemented but not yet at feature parity with the Streamlit app (no "Ask the news", no "My vocabulary" page, no export).
 - **Content source:** one channel today — *NOS Journaal in Makkelijke Taal*. Support for additional Dutch channels (e.g. Nieuwsuur, NCRV documentaries) as an opt-in, difficulty-tagged tier is planned.
 - **Pipeline and database:** Neon Postgres is the source of truth. The daily pipeline (`scripts/run_pipeline.sh`) runs via CLI, scheduled with Windows Task Scheduler, on the owner's PC — a residential IP is required since YouTube blocks transcript fetching from datacenter hosts.
 - **Low-cost operation:** Local SQLite is used for dictionary lookups, OpenAI enrichment is optional, and deployments are kept lightweight by design.
@@ -32,7 +32,7 @@ This project transforms those broadcasts into a structured learning workflow:
 
 ```
 Watch today's episode → Read subtitles → Identify unknown words → Save vocabulary
-        → Review with daily quizzes → Track recurring vocabulary
+        → Review (Anki export today; in-app quiz planned) → Track recurring vocabulary
 ```
 
 The goal is to help learners acquire real-world Dutch vocabulary through repeated exposure.
@@ -50,7 +50,7 @@ The homepage displays the latest news episode and acts as the main learning entr
 - Clickable vocabulary with definition pop-ups
 - Extracted vocabulary list with status tracking
 
-**Learning flow:** Open today's episode → read subtitles (watch the video on YouTube alongside) → click unknown words → save vocabulary → take daily quiz
+**Learning flow:** Open today's episode → read subtitles (watch the video on YouTube alongside) → click unknown words → save vocabulary → export to Anki for review
 
 ### Subtitle-Driven Learning
 
@@ -83,11 +83,13 @@ Four-tier translation pipeline ensures high coverage and quality:
 
 For each word the system tracks:
 
-- First seen date, last reviewed date
+- First seen date
 - Number of occurrences
 - Number of episodes containing the word
-- Learning status
-- Quiz performance
+- Learning status (new / learning / known)
+- Optional learner note (used in export)
+
+Review scheduling (last-reviewed, quiz performance, spaced-repetition intervals) is planned — see the roadmap.
 
 ### Word Frequency Across Episodes
 
@@ -318,15 +320,16 @@ bash scripts/run_pipeline.sh            # Incremental (only new/missing data)
 | **6A** | PostgreSQL (Neon) + cloud migration | ✅ Done |
 | **6B** | Daily pipeline (CLI + Windows Task Scheduler) | ✅ Done |
 | **6C** | User auth (email + anonymous sessions) | ✅ Done |
-| **7** | Semantic episode search + RAG ("Ask the news", pgvector + GPT-4o) | In progress — scaffolded; needs pgvector enabled on Neon + evaluation |
-| **8** | Multi-source ingestion (Nieuwsuur, NCRV, …) + in-app video where embedding is allowed | Planned |
-| **9** | Replace Streamlit with a faster hosted frontend (Next.js) | Planned |
-| **10** | Spaced repetition (SM-2) | Planned |
-| **11** | Pronunciation + shadowing | Needs redesign — assumed in-page video control; possible again on channels that allow embedding |
-| **12** | Retention: streaks, progress stats, habit features | Planned |
-| **13** | Content quality + CEFR levels | Planned |
-| **14** | Multi-language (French via RFI Journal en français facile) | Planned — after 10–12 |
-| — | Quiz system (translation multiple choice) | Partially built (Streamlit); expands with Phase 10 |
+| **7** | Semantic episode search + RAG ("Ask the news", pgvector + GPT-4o) | Live on prod — only the retrieval-eval dataset remains |
+| **8** | Operational hardening (pipeline alerting, fail-loud exit codes, migration consolidation) | Planned — next |
+| **9** | Multi-source ingestion (Nieuwsuur, NCRV, …) + in-app video where embedding is allowed | Planned |
+| **10** | Lexical data foundation (SUBTLEX-NL frequency → CEFR, episode difficulty, "sweet spot" vocab) | Planned |
+| **11** | Replace Streamlit with a faster hosted frontend (Next.js) | Planned |
+| **12** | Quiz (translation multiple choice) + spaced repetition (SM-2) | Planned — not yet built |
+| **13** | Pronunciation + shadowing | Needs redesign — assumed in-page video control; possible again on channels that allow embedding |
+| **14** | Retention: streaks, progress stats, habit features | Planned |
+| **15** | Content quality + CEFR + Dutch lexical richness (de/het gender, plurals, verb forms, compound splitting) | Planned |
+| **16** | Multi-language (French via RFI Journal en français facile) | Planned — after 12–14 |
 
 ---
 
