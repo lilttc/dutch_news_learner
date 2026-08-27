@@ -8,8 +8,9 @@ The project begins as a personal learning tool and is designed to evolve into a 
 
 ## Current Status
 
-- **Streamlit is the primary public app today.** It is live on Streamlit Community Cloud and is the main learning experience for users.
-- **Next.js + FastAPI exist as a secondary/demo frontend stack.** This path is implemented but currently not the main product while the Streamlit app is active.
+- **Streamlit is the primary public app today.** It is live on Streamlit Community Cloud and is the main learning experience for users. A migration to a faster, always-on hosted frontend (Next.js) is the next major piece of work — see the roadmap.
+- **Next.js + FastAPI exist as a secondary frontend stack** and are the candidate for that migration. This path is implemented but not yet at feature parity with the Streamlit app.
+- **Content source:** one channel today — *NOS Journaal in Makkelijke Taal*. Support for additional Dutch channels (e.g. Nieuwsuur, NCRV documentaries) as an opt-in, difficulty-tagged tier is planned.
 - **Pipeline and database:** Neon Postgres is the source of truth. The daily pipeline (`scripts/run_pipeline.sh`) runs via CLI, scheduled with Windows Task Scheduler, on the owner's PC — a residential IP is required since YouTube blocks transcript fetching from datacenter hosts.
 - **Low-cost operation:** Local SQLite is used for dictionary lookups, OpenAI enrichment is optional, and deployments are kept lightweight by design.
 
@@ -134,8 +135,8 @@ To keep the project focused, v1 intentionally avoids:
 | Embeddings | OpenAI text-embedding-3-small (semantic episode search) |
 | Ingestion | youtube-transcript-api, YouTube Data API v3 |
 | Search | DuckDuckGo (related NOS articles), pgvector (semantic episode search) |
-| Frontend (primary) | Streamlit |
-| Frontend (staging) | Next.js + TypeScript + Tailwind CSS |
+| Frontend (primary, live) | Streamlit — migration to Next.js planned |
+| Frontend (in progress) | Next.js + TypeScript + Tailwind CSS |
 
 ### Public Platform (Future)
 
@@ -316,10 +317,16 @@ bash scripts/run_pipeline.sh            # Incremental (only new/missing data)
 | **5B** | Video-transcript UX (click-to-watch card + timestamp deep links; NOS disabled third-party embedding) | ✅ Done |
 | **6A** | PostgreSQL (Neon) + cloud migration | ✅ Done |
 | **6B** | Daily pipeline (CLI + Windows Task Scheduler) | ✅ Done |
-| **6C** | User auth + proper hosting | Planned |
-| **7** | Semantic episode search + RAG ("Ask the news", pgvector + GPT-4o) | In progress |
-| **Next** | Shadowing mode (auto-pause per sentence for speaking practice) | Needs redesign — assumed in-page video control, no longer possible now that embedding is disabled |
-| **Next** | Quiz system (translation multiple choice, spaced repetition) | Planned |
+| **6C** | User auth (email + anonymous sessions) | ✅ Done |
+| **7** | Semantic episode search + RAG ("Ask the news", pgvector + GPT-4o) | In progress — scaffolded; needs pgvector enabled on Neon + evaluation |
+| **8** | Multi-source ingestion (Nieuwsuur, NCRV, …) + in-app video where embedding is allowed | Planned |
+| **9** | Replace Streamlit with a faster hosted frontend (Next.js) | Planned |
+| **10** | Spaced repetition (SM-2) | Planned |
+| **11** | Pronunciation + shadowing | Needs redesign — assumed in-page video control; possible again on channels that allow embedding |
+| **12** | Retention: streaks, progress stats, habit features | Planned |
+| **13** | Content quality + CEFR levels | Planned |
+| **14** | Multi-language (French via RFI Journal en français facile) | Planned — after 10–12 |
+| — | Quiz system (translation multiple choice) | Partially built (Streamlit); expands with Phase 10 |
 
 ---
 

@@ -211,15 +211,14 @@ Episode (title, description, transcript)
 │ video_id         │   │   │ episode_id (FK)      │       │ lemma (unique)    │
 │ title            │   └──│ start_time           │       │ pos               │
 │ published_at     │      │ duration             │       │ translation       │
-│ thumbnail_url    │      │ text                 │       │ qa_translation    │
-│ topics           │      │ translation_en       │       │ qa_pos            │
-│ related_articles │      └─────────────────────┘       │ qa_note           │
-└────────┬─────────┘                                    │ qa_checked        │
-         │                                              │ frequency_rank    │
-         │                                              │ cefr_level        │
+│ source           │      │ text                 │       │ qa_translation    │
+│ embeddable       │      │ translation_en       │       │ qa_pos            │
+│ thumbnail_url    │      └─────────────────────┘       │ qa_note           │
+│ topics           │                                     │ qa_checked        │
+│ related_articles │                                     │ frequency_rank    │
+└────────┬─────────┘                                     │ cefr_level        │
          │                                              └────────┬─────────┘
-└────────┬─────────┘                                              │
-         │              ┌─────────────────────┐
+         │              ┌─────────────────────┐                   │
          │              │ EpisodeVocabulary   │                   │
          └──────────────│ episode_id (FK)     │◀──────────────────┘
                         │ vocabulary_id (FK)  │
@@ -255,7 +254,7 @@ Episode (title, description, transcript)
 
 | Table | Purpose |
 |-------|---------|
-| **Episode** | One NOS Journaal video. Stores YouTube metadata, summary, publish date, topics (pipe-separated for Related reading). |
+| **Episode** | One news video. Stores YouTube metadata, summary, publish date, topics (pipe-separated for Related reading), `source` (which channel — one today, multi-channel planned), and `embeddable` (whether the video allows in-page playback). |
 | **SubtitleSegment** | One subtitle line. Text, start/end timestamps, optional translation_en (LLM), links to episode. |
 | **VocabularyItem** | Master vocabulary. Lemma, POS, translation, frequency rank, CEFR. QA fields (qa_translation, qa_pos, qa_note, qa_checked) store LLM-reviewed corrections; display layer prefers these over originals. |
 | **EpisodeVocabulary** | Junction: which words appear in which episode, with counts and examples. |
@@ -412,8 +411,8 @@ app/
 - **PostgreSQL (Neon)** - Cloud database, shared by Streamlit app and pipeline
 - **SQLite fallback** - Local dev when `DATABASE_URL` not set
 - **Dictionary** - Local SQLite file (`dutch_glosses.db`, read-only)
-- **Streamlit Cloud** - Primary deployment; auto-deploys from `main` branch
-- **FastAPI + Next.js** - Secondary/portfolio stack, currently suspended on Render/Vercel
+- **Streamlit Cloud** - Primary deployment today; auto-deploys from `main` branch. Slated for replacement — Community Cloud sleeps on inactivity and is slow under interaction.
+- **FastAPI + Next.js** - Secondary stack (suspended on Render/Vercel); the candidate to replace Streamlit as the primary frontend, pending feature-parity work
 - **Pipeline** - `run_pipeline.sh` runs via WSL cron on owner's PC (weekdays 18:00 Amsterdam)
 
 ### 7.2 Public Platform (Future)
@@ -445,6 +444,9 @@ app/
 
 ## 9. Future Architecture Extensions
 
+- **Multi-source ingestion** - Config-driven channel list (Nieuwsuur, NCRV documentaries) with a per-source difficulty tag; `Episode.source` already exists
+- **Conditional embed** - Play the video in-page for channels that permit embedding; `Episode.embeddable` captured at ingest
+- **Frontend migration** - Move off Streamlit to a faster, always-on hosted frontend (Next.js)
 - **Spaced repetition** - Replace simple queue with SM-2 or similar
 - **Topic clustering** - Group vocabulary by news topic
 - **Shadowing mode** - Auto-pause after each sentence for speaking practice
