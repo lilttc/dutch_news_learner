@@ -7,7 +7,7 @@ google-api-python-client>=2.0.0
 python-dotenv>=1.0.0
 
 # Database
-sqlalchemy>=2.0.0
+sqlalchemy>=2.0.0,<2.1  # 2.1 defaults postgresql:// to psycopg (v3), which is not installed
 psycopg2-binary>=2.9.0  # Postgres driver (Neon)
 pgvector>=0.3.0  # Episode.embedding column (semantic search)
 

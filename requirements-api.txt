@@ -6,7 +6,7 @@ fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 
 # Database
-sqlalchemy>=2.0.0
+sqlalchemy>=2.0.0,<2.1  # 2.1 defaults postgresql:// to psycopg (v3), which is not installed
 psycopg2-binary>=2.9.0  # Postgres driver (Neon)
 
 # Auth (Phase 6F)
