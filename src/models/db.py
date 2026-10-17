@@ -8,7 +8,10 @@ Vocabulary tables (VocabularyItem, EpisodeVocabulary, UserVocabulary) added in P
 import logging
 import os
 import sqlite3
+import time
+from collections.abc import Callable, Sequence
 from datetime import datetime
+from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.exc import OperationalError, ProgrammingError
@@ -324,12 +327,55 @@ def _is_postgres(url: str) -> bool:
     return url.startswith("postgresql") or url.startswith("postgres://")
 
 
+# Seconds to wait before each retry of a failed Postgres connect. Covers Neon's
+# scale-to-zero wake-up, during which the pooler can drop the TLS handshake
+# ("SSL SYSCALL error: EOF detected"). Total worst-case wait: 14s over 4 attempts.
+_CONNECT_RETRY_DELAYS = (2, 4, 8)
+
+
+def _connect_with_retry(
+    connect: Callable[..., Any],
+    cargs: Sequence[Any],
+    cparams: dict[str, Any],
+    retry_on: type[Exception],
+    sleep: Callable[[float], None] = time.sleep,
+) -> Any:
+    """Open a DBAPI connection, retrying transient connect failures with backoff.
+
+    Args:
+        connect: The DBAPI ``connect`` callable (e.g. ``psycopg2.connect``).
+        cargs: Positional arguments for ``connect``.
+        cparams: Keyword arguments for ``connect``.
+        retry_on: Exception class that counts as transient (the DBAPI's
+            ``OperationalError``). Any other exception propagates immediately.
+        sleep: Delay function, injectable for tests.
+
+    Returns:
+        The open DBAPI connection from the first successful attempt.
+
+    Raises:
+        retry_on: The last error, once all ``len(_CONNECT_RETRY_DELAYS) + 1``
+            attempts have failed. Non-transient errors such as a bad password are
+            also ``OperationalError`` in psycopg2, so they cost the full 14s
+            before surfacing.
+    """
+    for delay in _CONNECT_RETRY_DELAYS:
+        try:
+            return connect(*cargs, **cparams)
+        except retry_on as exc:
+            _logger.warning("DB connect failed (%s); retrying in %ss", exc, delay)
+            sleep(delay)
+    return connect(*cargs, **cparams)
+
+
 def get_engine(db_url: str | None = None):
     """Create a SQLAlchemy engine.
 
     * Postgres (via DATABASE_URL): uses a connection pool (5 connections,
-      overflow to 10) and requires SSL for Neon.
-    * SQLite (local dev): simple single-connection engine.
+      overflow to 10) and requires SSL for Neon. Every new connection is opened
+      via ``_connect_with_retry``, so a transient connect failure (e.g. Neon
+      waking from suspend) is retried with backoff instead of failing the caller.
+    * SQLite (local dev): simple single-connection engine, no retry.
     """
     url = _resolve_url(db_url)
 
@@ -344,6 +390,15 @@ def get_engine(db_url: str | None = None):
             pool_pre_ping=True,  # Reconnect if Neon scaled to zero and closed idle connections
             connect_args={"sslmode": "require"},
         )
+
+        @event.listens_for(eng, "do_connect")
+        def _retrying_connect(dialect, conn_rec, cargs, cparams):
+            return _connect_with_retry(
+                dialect.loaded_dbapi.connect,
+                cargs,
+                cparams,
+                retry_on=dialect.loaded_dbapi.OperationalError,
+            )
 
         @event.listens_for(eng, "connect")
         def _reset_lock_timeout(dbapi_conn, connection_record):
